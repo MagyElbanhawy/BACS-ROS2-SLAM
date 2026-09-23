@@ -1,0 +1,18 @@
+# RYLR998 AT Command Configuration
+# Captured from serial terminal (115200 baud) during session setup
+# Date: 2026-07
+# Module: Reyax RYLR998 (820–960 MHz band)
+
+AT+BAND=868000000
+AT+PARAMETER=7,0,1,7
+AT+ADDRESS=100
+AT+NETWORKID=18
+AT+MODE=0
+AT+CRFOP=15
+
+# Verification:
+#   Band  : 868 MHz
+#   SF/BW : SF7 / 125 kHz / CR 4/5
+#   Payload: 52 bytes
+#   Air time: ~92 ms
+#   Channel delay: ~170 ms
