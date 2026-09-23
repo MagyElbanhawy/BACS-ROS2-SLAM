@@ -1,0 +1,60 @@
+rosbag2_bagfile_information:
+  version: 5
+  storage_identifier: mcap
+  duration:
+    nanoseconds: 7200000000000
+  starting_time:
+    nanoseconds_since_epoch: 1784110422000000000
+  message_count: 2666056
+  topics_with_message_count:
+    - topic_metadata:
+        name: /vicon/limo01/pose
+        type: geometry_msgs/msg/PoseStamped
+        serialization_format: cdr
+        offered_qos_profiles: ""
+      message_count: 720000
+    - topic_metadata:
+        name: /vicon/limo02/pose
+        type: geometry_msgs/msg/PoseStamped
+        serialization_format: cdr
+        offered_qos_profiles: ""
+      message_count: 720000
+    - topic_metadata:
+        name: /odom/limo01
+        type: nav_msgs/msg/Odometry
+        serialization_format: cdr
+        offered_qos_profiles: ""
+      message_count: 360000
+    - topic_metadata:
+        name: /odom/limo02
+        type: nav_msgs/msg/Odometry
+        serialization_format: cdr
+        offered_qos_profiles: ""
+      message_count: 360000
+    - topic_metadata:
+        name: /scan/limo01
+        type: sensor_msgs/msg/LaserScan
+        serialization_format: cdr
+        offered_qos_profiles: ""
+      message_count: 72000
+    - topic_metadata:
+        name: /scan/limo02
+        type: sensor_msgs/msg/LaserScan
+        serialization_format: cdr
+        offered_qos_profiles: ""
+      message_count: 72000
+    - topic_metadata:
+        name: /tf
+        type: tf2_msgs/msg/TFMessage
+        serialization_format: cdr
+        offered_qos_profiles: ""
+      message_count: 360000
+    - topic_metadata:
+        name: /bacs/scheduler
+        type: std_msgs/msg/String
+        serialization_format: cdr
+        offered_qos_profiles: ""
+      message_count: 2056
+  relative_file_paths:
+    - HWS-003-BACS_20260715_101342_mcap.mcap
+  compression_format: ""

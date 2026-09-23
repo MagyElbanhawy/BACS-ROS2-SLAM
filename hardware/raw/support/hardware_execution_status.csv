@@ -1,0 +1,4 @@
+session_id,policy,data_acquisition_start_utc,data_acquisition_end_utc,acquisition_precision,exact_time_available,processing_date_utc,archive_date_utc,n_runs,run_duration_sec,ros_distro,lora_module,lora_freq_mhz,lora_sf,lora_bw_khz,lora_cr,lora_payload_bytes,tracking,robots
+HWS-002-FIFO,FIFO,2026-07,2026-07,month,false,2026-07-22,2026-09-23T04:27:45Z,10,720,ROS 2 Humble,RYLR998,868,7,125,4/5,52,Vicon,"LIMO-01,LIMO-02"
+HWS-003-BACS,BACS,2026-07,2026-07,month,false,2026-07-22,2026-09-23T04:27:45Z,10,720,ROS 2 Humble,RYLR998,868,7,125,4/5,52,Vicon,"LIMO-01,LIMO-02"
+HWS-005-BACS+,BACS+,2026-07,2026-07,month,false,2026-07-22,2026-09-23T04:27:45Z,10,720,ROS 2 Humble,RYLR998,868,7,125,4/5,52,Vicon,"LIMO-01,LIMO-02"

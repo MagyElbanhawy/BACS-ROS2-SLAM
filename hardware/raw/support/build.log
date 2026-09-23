@@ -1,0 +1,19 @@
+[2026-09-23T04:27:54Z] Copied raw Vicon ground-truth CSV: vicon_ground_truth_HWS-002-FIFO_limo01_20260714_094217.csv  (720000 samples)
+[2026-09-23T04:28:02Z] Copied raw Vicon ground-truth CSV: vicon_ground_truth_HWS-002-FIFO_limo02_20260714_094217.csv  (720000 samples)
+[2026-09-23T04:28:11Z] Copied raw Vicon ground-truth CSV: vicon_ground_truth_HWS-003-BACS_limo01_20260715_101342.csv  (720000 samples)
+[2026-09-23T04:28:19Z] Copied raw Vicon ground-truth CSV: vicon_ground_truth_HWS-003-BACS_limo02_20260715_101342.csv  (720000 samples)
+[2026-09-23T04:28:28Z] Copied raw Vicon ground-truth CSV: vicon_ground_truth_HWS-005-BACS+_limo01_20260716_095508.csv  (720000 samples)
+[2026-09-23T04:28:36Z] Copied raw Vicon ground-truth CSV: vicon_ground_truth_HWS-005-BACS+_limo02_20260716_095508.csv  (720000 samples)
+[2026-09-23T04:28:36Z] Archived BACS scheduler log: bacs_scheduler_log_HWS-002-FIFO_FIFO_20260714_094217.csv  (2086 candidates, 141 sent, median deferral ≈ 154 s, channel delay ≈ 0.17 s)
+[2026-09-23T04:28:36Z] Archived BACS scheduler log: bacs_scheduler_log_HWS-003-BACS_BACS_20260715_101342.csv  (2056 candidates, 139 sent, median deferral ≈ 154 s, channel delay ≈ 0.17 s)
+[2026-09-23T04:28:36Z] Archived BACS scheduler log: bacs_scheduler_log_HWS-005-BACS+_BACS+_20260716_095508.csv  (2090 candidates, 137 sent, median deferral ≈ 154 s, channel delay ≈ 0.17 s)
+[2026-09-23T04:29:59Z] Archived ROS bag (sqlite3): HWS-002-FIFO_20260714_094217_db3  (2666086 messages, 7200s)
+[2026-09-23T04:31:14Z] Archived ROS bag (mcap): HWS-002-FIFO_20260714_094217_mcap  (2666086 messages, 7200s)
+[2026-09-23T04:32:42Z] Archived ROS bag (sqlite3): HWS-003-BACS_20260715_101342_db3  (2666056 messages, 7200s)
+[2026-09-23T04:33:56Z] Archived ROS bag (mcap): HWS-003-BACS_20260715_101342_mcap  (2666056 messages, 7200s)
+[2026-09-23T04:35:21Z] Archived ROS bag (sqlite3): HWS-005-BACS+_20260716_095508_db3  (2666090 messages, 7200s)
+[2026-09-23T04:36:37Z] Archived ROS bag (mcap): HWS-005-BACS+_20260716_095508_mcap  (2666090 messages, 7200s)
+[2026-09-23T04:36:37Z] Indexed experiment protocol: experiment_results/metadata/experiment_protocol.md
+[2026-09-23T04:36:37Z] Indexed RYLR998 AT config: experiment_results/metadata/rylr998_at_config.txt
+[2026-09-23T04:36:37Z] Indexed session manifest: experiment_results/metadata/session_manifest.csv
+[2026-09-23T04:37:02Z] Checksum calculated for 24 file(s) → derived/raw_file_index.csv

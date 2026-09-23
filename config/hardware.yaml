@@ -1,0 +1,8 @@
+hardware:
+  robots: [LIMO-01, LIMO-02]
+  ros_distribution: humble
+  ubuntu: "22.04"
+  ground_truth: Vicon
+  lidar: EAI T-mini Pro
+  rgbd: Orbbec DaBai
+  compute: Intel NUC i7

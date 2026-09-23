@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>bacs_scheduler</name><version>1.0.0</version>
+  <description>Bandwidth- and observability-aware constraint scheduling.</description>
+  <maintainer email="reproducibility@example.invalid">Reproducibility maintainers</maintainer>
+  <license>MIT</license>
+  <buildtool_depend>ament_python</buildtool_depend>
+  <exec_depend>rclpy</exec_depend>
+  <test_depend>ament_pytest</test_depend>
+  <export><build_type>ament_python</build_type></export>
+</package>
