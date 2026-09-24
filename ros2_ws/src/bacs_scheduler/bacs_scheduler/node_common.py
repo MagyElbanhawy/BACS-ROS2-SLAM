@@ -7,7 +7,7 @@ import subprocess
 import time
 from pathlib import Path
 
-from .rylr998 import Rylr998Link, configuration_commands
+from .rylr998 import Rylr998Link, configuration_commands, expected_readback, readback_mismatches
 
 
 def run_dir(log_dir: str, session: str, run: int) -> Path:
@@ -28,9 +28,10 @@ def clock_snapshot(path: Path) -> None:
 def configure_radio(link: Rylr998Link, path: Path, address: int, network_id: int, bw_code: int,
                     preamble: int, power_dbm: int) -> None:
     """Configure the module and store every command with the module's own reply."""
-    replies = link.configure(configuration_commands(address, network_id, bw_code=bw_code,
-                                                    preamble=preamble, power_dbm=power_dbm))
-    path.write_text(json.dumps([{"command": c, "response": r} for c, r in replies], indent=2), encoding="utf-8")
-    failed = [c for c, r in replies if r in ("TIMEOUT",) or r.startswith("+ERR")]
-    if failed:
-        raise RuntimeError(f"RYLR998 rejected {failed}; see {path}")
+    settings = dict(address=address, network_id=network_id, bw_code=bw_code, preamble=preamble, power_dbm=power_dbm)
+    replies = link.configure(configuration_commands(**settings))
+    problems = readback_mismatches(replies, expected_readback(**settings))
+    path.write_text(json.dumps({"replies": [{"command": c, "response": r} for c, r in replies],
+                                "problems": problems}, indent=2), encoding="utf-8")
+    if problems:
+        raise RuntimeError(f"RYLR998 configuration not as required: {problems}; see {path}")

@@ -17,11 +17,17 @@ Build the package on every machine: `colcon build --packages-select bacs_schedul
 1. **Radio settings.** Set on all three modules; the nodes do this at start.
    - `AT+NETWORKID=18`, `AT+BAND=868000000`, `AT+PARAMETER=7,7,1,8` (SF7, **BW code 7 = 125 kHz**, CR 4/5, 8 preamble symbols), `AT+CRFOP=14`.
    - The old config used `AT+PARAMETER=7,0,1,7`. The second field is a bandwidth *code*, and `0` is not 125 kHz.
-   - Each run folder gets `radio_config_*.json` with the module's own replies to `AT+PARAMETER?` and the other read-backs. Check it says `+PARAMETER=7,7,1,8`.
+   - Configure and verify each module once with `python3 scripts/hw/rylr998_setup.py --port /dev/ttyUSB0 --address <1|2|100> --out radio_setup_<name>.json`. It must print PASS.
+   - The nodes repeat this at every start, save `radio_config_*.json`, and refuse to run if any read-back differs (for example `+PARAMETER=7,0,1,7`).
 2. **Transmit power.** The g1 sub-band (868.0–868.6 MHz, 1% duty cycle) allows 25 mW ERP (14 dBm). Subtract your antenna gain from `power_dbm` if it is above 0 dBi.
 3. **Clocks.** Run chrony on both NUCs, using the server as the time source. Each node writes `clock_*_start.txt` and `clock_*_end.txt` (`chronyc tracking` output). Accept a run only if |offset| < 1 ms on both robots.
    - Channel delay is `t_rcv` (server clock) − `t_cmd` (robot clock), so it is only as good as this synchronisation.
-4. **Calibrate what `+OK` means.** Send 100 packets with the robot 1 m from the server. Compare `t_ok − t_cmd` with the 102.7 ms time-on-air. If they agree, `+OK` means "transmission finished"; if `t_ok − t_cmd` is only a few ms, it means "command accepted". Record the result in the dataset README and define channel delay accordingly.
+4. **Calibrate what `+OK` means** (once, about 18 min). Connect two modules to one computer, about 1 m apart, and run
+   `python3 scripts/hw/calibrate_ok_timing.py --tx-port /dev/ttyUSB0 --rx-port /dev/ttyUSB1 --count 100 --out calibration/`.
+   Both timestamps then come from one clock. The script compares command→`+OK` with the 102.7 ms time-on-air (and with the ≈6 ms needed to clock the command through the UART) and reports `OK_AFTER_TRANSMISSION`, `OK_ON_ACCEPT` or `AMBIGUOUS`. It also measures command→`+RCV`, which is the channel delay free of clock-sync error.
+   Commit `calibration/` with the dataset. Then define channel delay in the paper from the verdict:
+   - `OK_AFTER_TRANSMISSION`: `+OK` marks the end of transmission, so `t_rcv − t_ok` is the receive-side delay.
+   - `OK_ON_ACCEPT`: `t_rcv − t_cmd` includes the airtime.
 5. **Drive mode.** Record which mode each LIMO runs in (differential, mecanum, Ackermann or track), the commanded speed and the trajectory type. The paper must describe the platform exactly as recorded.
 
 ## 3. Candidate interface
