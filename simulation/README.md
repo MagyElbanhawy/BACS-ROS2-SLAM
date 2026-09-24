@@ -10,7 +10,7 @@ The simulation results come from `bacs_sim` (world generation, odometry drift, c
 python scripts/reproduce_simulation.py                  # all generators incl. S8 (30 seeds x N=2-5), then statistics
 python scripts/reproduce_simulation.py --skip-s8        # S7-C, S9, progression only
 python scripts/reproduce_simulation.py --analysis-only  # statistics from existing CSVs (fresh if present, else frozen)
-python scripts/generate_figures.py                      # sim_s8_*.png in figures/generated/
+python scripts/generate_figures.py                      # sim_s8_*.png in figures/extract/
 python scripts/update_report.py                         # compares every claim with the manuscript
 ```
 
@@ -25,3 +25,4 @@ The simulator writes `paper_results/*.csv`. `analysis/simulation/s8.py` rebuilds
 | `sim_s8_observability_ablation.png` | Fig. 9, 0.60/5 vs 0.30/6 |
 
 S7-C and S9 figures are not generated yet. They need the column layout of `s7c_paired.csv` and `s9_deferral_gamma.csv`.
+
