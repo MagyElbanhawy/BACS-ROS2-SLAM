@@ -172,3 +172,30 @@ def test_join_keeps_lost_packets_blank_and_passes_validation(tmp_path: Path) -> 
     with out.open("w", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=JOINED_FIELDS); writer.writeheader(); writer.writerows(joined)
     assert validate_scheduler(out)["status"] == "VALID"
+
+
+def test_readback_rejects_wrong_bandwidth_code() -> None:
+    from ros2_ws.src.bacs_scheduler.bacs_scheduler.rylr998 import (
+        configuration_commands, expected_readback, readback_mismatches)
+    settings = dict(address=1, network_id=18)
+    good = {"AT+ADDRESS?": "+ADDRESS=1", "AT+NETWORKID?": "+NETWORKID=18", "AT+BAND?": "+BAND=868000000",
+            "AT+PARAMETER?": "+PARAMETER=7,7,1,8", "AT+CRFOP?": "+CRFOP=14"}
+    replies = [(c, good.get(c, "+OK")) for c in configuration_commands(**settings)]
+    assert "AT+PARAMETER=7,7,1,8" in dict(replies)
+    assert readback_mismatches(replies, expected_readback(**settings)) == []
+    old = [(c, "+PARAMETER=7,0,1,7" if c == "AT+PARAMETER?" else r) for c, r in replies]
+    assert readback_mismatches(old, expected_readback(**settings)) == [
+        "AT+PARAMETER? -> +PARAMETER=7,0,1,7 (expected +PARAMETER=7,7,1,8)"]
+    assert readback_mismatches([(c, "+ERR=4" if c == "AT+BAND=868000000" else r) for c, r in replies],
+                               expected_readback(**settings)) == ["AT+BAND=868000000 -> +ERR=4"]
+
+
+@pytest.mark.parametrize("ok_ms, verdict", [(104.0, "OK_AFTER_TRANSMISSION"), (7.0, "OK_ON_ACCEPT"),
+                                            (50.0, "AMBIGUOUS")])
+def test_calibration_verdict(ok_ms: float, verdict: str) -> None:
+    from ros2_ws.src.bacs_scheduler.bacs_scheduler.calibration import summarise, uart_time_s
+    rows = [{"i": i, "t_cmd_ns": 0, "t_ok_ns": int((ok_ms + i % 3) * 1e6), "response": "+OK",
+             "t_rcv_ns": int(112e6) if i != 5 else "", "rssi_dbm": -40, "snr_db": 10} for i in range(20)]
+    summary = summarise(rows, airtime_s=0.1027, command_chars=69)
+    assert summary["verdict"] == verdict and summary["received"] == 19 and summary["ok"] == 20
+    assert summary["uart_command_s"] == pytest.approx(uart_time_s(69)) == pytest.approx(0.00616, abs=1e-5)

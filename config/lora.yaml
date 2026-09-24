@@ -8,3 +8,11 @@ regulatory:
   duty_cycle: 0.01
 scheduler:
   window_s: 60.0
+rylr998:
+  # AT+PARAMETER=<SF>,<BW code>,<CR code>,<preamble>; BW code 7 = 125 kHz, CR code 1 = 4/5.
+  # The earlier HWS-002/003/005 config used 7,0,1,7 (BW code 0 is not 125 kHz).
+  at_parameter: "7,7,1,8"
+  network_id: 18          # required for a preamble other than 12
+  band_hz: 868000000
+  crfop_dbm: 14           # 25 mW ERP limit in 868.0-868.6 MHz; reduce by antenna gain above 0 dBi
+  addresses: {limo01: 1, limo02: 2, server: 100}

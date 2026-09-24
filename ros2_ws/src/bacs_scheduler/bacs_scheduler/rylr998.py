@@ -176,3 +176,20 @@ def configuration_commands(address: int, network_id: int, band_hz: int = 868_000
         f"AT+PARAMETER={sf},{bw_code},{cr_code},{preamble}", f"AT+CRFOP={power_dbm}",
         "AT+ADDRESS?", "AT+NETWORKID?", "AT+BAND?", "AT+PARAMETER?", "AT+CRFOP?", "AT+VER?", "AT+UID?",
     ]
+
+
+def expected_readback(address: int, network_id: int, band_hz: int = 868_000_000, sf: int = 7, bw_code: int = 7,
+                      cr_code: int = 1, preamble: int = 8, power_dbm: int = 14) -> dict[str, str]:
+    """Replies the module must give to the read-back queries of :func:`configuration_commands`."""
+    return {"AT+ADDRESS?": f"+ADDRESS={address}", "AT+NETWORKID?": f"+NETWORKID={network_id}",
+            "AT+BAND?": f"+BAND={band_hz}", "AT+PARAMETER?": f"+PARAMETER={sf},{bw_code},{cr_code},{preamble}",
+            "AT+CRFOP?": f"+CRFOP={power_dbm}"}
+
+
+def readback_mismatches(replies: list[tuple[str, str]], expected: dict[str, str]) -> list[str]:
+    """Commands whose reply was an error/timeout, or whose read-back differs from ``expected``."""
+    got = dict(replies)
+    problems = [f"{c} -> {r}" for c, r in replies if r == "TIMEOUT" or r.startswith("+ERR")]
+    problems += [f"{q} -> {got.get(q, 'NO REPLY')} (expected {want})"
+                 for q, want in expected.items() if got.get(q, "").replace(" ", "") != want]
+    return problems
