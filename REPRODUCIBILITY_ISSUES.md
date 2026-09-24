@@ -44,4 +44,4 @@ Each of these needs an explanation in the dataset documentation, or needs checki
 
 ## 5. Simulation outputs
 
-See `simulation/README.md`. The committed `simulation/run.py` can't produce Tables 4–7 or Figs 2–9. The simulator that can (`bacs_sim/`) is in `MagyElbanhawy/ros2_BACS_untested`, and its frozen S8 results match the manuscript's simulation numbers. It still has to be copied in and re-run to confirm those numbers reproduce.
+Resolved in code. `bacs_sim` is the simulator, and a 3-seed S8 rerun matches the frozen results to 1.4 × 10⁻¹⁴. `scripts/reproduce_simulation.py`, the `sim_s8_*` figures and the report are wired to it (see `simulation/README.md`). Still to do: the full 30-seed rerun, and the S7-C and S9 figures.
