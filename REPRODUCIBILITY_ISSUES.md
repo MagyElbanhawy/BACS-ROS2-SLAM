@@ -40,7 +40,7 @@ Each of these needs an explanation in the dataset documentation, or needs checki
 
 **Consequence.** The scheduler logs in `hardware/raw/` can't be used as measurements of channel delay, deferral, RSSI/SNR or airtime. H5 (deferral dominance, the 906× ratio), Sec. 7.4 and Table 6 have no measured basis. The Vicon ground truth is exact sinusoids (item 1), so the physical map-alignment result (Sec. 7.3, abstract, H4) also can't be supported from this dataset. That holds whatever SLAM replay produces from these bags.
 
-**What would fix it.** Either run a new physical experiment with a scheduler node that timestamps real RYLR998 events (`AT+SEND` → `+OK` for `t_tx`, `+RCV` for `t_rx`, and RSSI/SNR parsed from `+RCV` on sent packets only), or remove the physical-validation claims and present the paper as simulation-only. Item 2 (drive type) only matters for a new experiment. It should then be recorded in the protocol: drive mode, commanded speed and trajectory.
+**What would fix it.** Either run a new physical experiment with a scheduler node that timestamps real RYLR998 events (`AT+SEND` → `+OK` for `t_tx`, `+RCV` for `t_rx`, and RSSI/SNR parsed from `+RCV` on sent packets only), or remove the physical-validation claims and present the paper as simulation-only. **Chosen (2026-09-24): new measured experiment.** See `docs/HARDWARE_EXPERIMENT_V2.md` and the `bacs_sender`/`bacs_receiver` nodes. Item 2 (drive type) only matters for a new experiment. It should then be recorded in the protocol: drive mode, commanded speed and trajectory.
 
 ## 5. Simulation outputs
 
