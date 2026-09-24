@@ -15,7 +15,7 @@ from typing import Any
 JOINED_FIELDS = ["session", "run", "seq", "policy", "robot", "t_gen_ns", "t_selected_ns", "t_tx_ns", "t_ok_ns",
                  "t_rx_ns", "deferral_ns", "channel", "rssi_dbm", "snr_db", "payload_hex", "payload_bytes",
                  "sent", "received", "status", "radio_response", "predicted_trust", "information_score",
-                 "pair_constraints"]
+                 "pair_constraints", "queue_length", "rank_time_us"]
 
 
 def _read(path: Path) -> list[dict[str, str]]:
@@ -55,7 +55,8 @@ def join_run(run_dir: Path) -> tuple[list[dict[str, Any]], dict[str, int]]:
             "payload_hex": "", "payload_bytes": c["payload_bytes"], "sent": int(sent), "received": int(rx is not None),
             "status": c["status"], "radio_response": c.get("radio_response", ""),
             "predicted_trust": c["predicted_trust"], "information_score": c["information_score"],
-            "pair_constraints": c["pair_constraints"],
+            "pair_constraints": c["pair_constraints"], "queue_length": c.get("queue_length", ""),
+            "rank_time_us": c.get("rank_time_us", ""),
         })
     joined.sort(key=lambda r: (int(r["t_gen_ns"]), r["robot"], int(r["seq"])))
     report = {"candidates": len(candidates), "sent": sum(r["sent"] for r in joined),

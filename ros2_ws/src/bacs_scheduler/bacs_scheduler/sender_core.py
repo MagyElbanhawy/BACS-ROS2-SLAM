@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import csv
 import threading
+import time
 from dataclasses import dataclass
 from typing import IO, Any, Callable, Protocol
 
@@ -19,7 +20,7 @@ from .scheduler import Constraint, DutyCycleBudget, Scheduler, lora_airtime_s
 CANDIDATE_LOG_FIELDS = [
     "session", "run", "policy", "robot", "seq", "robot_i", "robot_j", "kf_i", "kf_j", "t_gen_ns", "t_enqueued_ns",
     "t_selected_ns", "t_cmd_ns", "t_ok_ns", "radio_response", "payload_bytes", "airtime_s",
-    "predicted_trust", "information_score", "pair_constraints", "status",
+    "predicted_trust", "information_score", "pair_constraints", "queue_length", "rank_time_us", "status",
 ]
 # status values
 SENT, RADIO_ERROR, RADIO_TIMEOUT = "SENT", "RADIO_ERROR", "RADIO_TIMEOUT"
@@ -88,11 +89,13 @@ class SenderCore:
             now = self.clock_ns()
             for seq in [s for s, p in self.queue.items() if now - p.constraint.generated_ns > self.max_queue_age_ns]:
                 self._finish(self.queue.pop(seq), DROPPED_AGE)
+            started = time.perf_counter_ns()
             ordered = self.scheduler.rank([p.constraint for p in self.queue.values()], now)
+            rank_time_us = (time.perf_counter_ns() - started) / 1000
             if not ordered or not self.scheduler.budget.can_send(now / 1e9, self.airtime_s):
                 return None
             item = self.queue.pop(ordered[0].sequence)
-            item.row["t_selected_ns"] = now
+            item.row.update({"t_selected_ns": now, "queue_length": len(self.queue) + 1, "rank_time_us": rank_time_us})
             t_cmd, t_resp, response = self.radio.command(send_command(self.destination, item.payload.encode()),
                                                          self.response_timeout_s)
             item.row.update({"t_cmd_ns": t_cmd, "t_ok_ns": t_resp if t_resp is not None else "",

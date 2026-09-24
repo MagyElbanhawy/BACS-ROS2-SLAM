@@ -69,6 +69,7 @@ class CandidateNode(Node):
         self.pub_request = self.create_publisher(String, "/bacs/kf_request", 100)
         self.pub_points = self.create_publisher(String, "/bacs/kf_points", 100)
         self.pub_candidates = self.create_publisher(String, "/bacs/candidates", 1000)
+        self.pub_keyframes = self.create_publisher(String, "/bacs/keyframes", 1000)
         self.create_subscription(LaserScan, fmt(p("scan_topic", "/scan/{robot}")), self.on_scan, 10)
         self.create_subscription(String, "/bacs/kf_desc", self.on_desc, 1000)
         self.create_subscription(String, "/bacs/kf_request", self.on_request, 1000)
@@ -114,6 +115,8 @@ class CandidateNode(Node):
         scan_stamp = scan.header.stamp.sec * 1_000_000_000 + scan.header.stamp.nanosec
         self.kf_writer.writerow([kf, stamp, scan_stamp, *pose, len(points)])
         self.keyframes.flush()
+        self._send(self.pub_keyframes, "/bacs/keyframes",
+                   {"robot": self.robot, "kf": kf, "stamp_ns": stamp, "x": pose[0], "y": pose[1], "yaw": pose[2]})
         message, requests, candidates = self.generator.add_own_keyframe(kf, stamp, points)
         self._send(self.pub_desc, "/bacs/kf_desc", message)
         for request in requests:
