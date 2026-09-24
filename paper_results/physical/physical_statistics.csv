@@ -1,3 +1,2 @@
 metric,comparison,n_pairs,wilcoxon_statistic,p_value,cliffs_delta,status,reason
-map_alignment_rmse_m,FIFO vs BACS+,0,,,,NOT_COMPUTABLE,No fused-map estimate or estimated trajectory is present.
 mean_scheduler_deferral_s,FIFO vs BACS+,10,27.0,1.0,-0.06,COMPUTED,Paired by logged run identifier; interpretation is limited to scheduler deferral.

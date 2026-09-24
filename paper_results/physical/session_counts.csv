@@ -1,0 +1,4 @@
+policy,runs,packets_generated_per_session,packets_sent_per_session,packets_generated_per_run_median,packets_sent_per_run_median
+BACS,10,2056,139,204.0,14.0
+BACS+,10,2090,137,208.5,13.0
+FIFO,10,2086,141,209.5,14.5

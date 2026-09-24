@@ -20,7 +20,7 @@ def main() -> None:
     plt.boxplot([[float(x["deferral_s"]) for x in rows if x["policy"] == policy] for policy in policies], tick_labels=policies)
     plt.ylabel("Scheduler deferral (s)"); plt.tight_layout(); plt.savefig(out / "physical_timing_distributions.png", dpi=200); plt.close()
     with (ROOT / "paper_results" / "physical" / "radio_summary.csv").open(newline="", encoding="utf-8") as handle:
-        radio = [r for r in csv.DictReader(handle) if r["metric"] in {"rssi_dbm_mean", "snr_db_mean", "airtime_utilisation"}]
+        radio = [r for r in csv.DictReader(handle) if r["metric"] in {"rssi_dbm_mean", "snr_db_mean", "airtime_fraction_of_duty_budget"}]
     plt.figure(figsize=(8, 4))
     labels = [f"{r['policy']}\n{r['metric']}" for r in radio]
     plt.bar(range(len(radio)), [float(r["median"]) for r in radio])
