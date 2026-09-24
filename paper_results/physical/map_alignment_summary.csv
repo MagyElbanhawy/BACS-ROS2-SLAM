@@ -1,4 +1,4 @@
-policy,metric,status,reason
-FIFO,map_alignment_rmse_m,NOT_COMPUTABLE,Raw evidence contains Vicon poses but no fused-map estimate or estimated trajectory required by the metric.
-BACS,map_alignment_rmse_m,NOT_COMPUTABLE,Raw evidence contains Vicon poses but no fused-map estimate or estimated trajectory required by the metric.
-BACS+,map_alignment_rmse_m,NOT_COMPUTABLE,Raw evidence contains Vicon poses but no fused-map estimate or estimated trajectory required by the metric.
+policy,n_runs,mean_m,std_m,ci95_low_m,ci95_high_m,median_m,p25_m,p75_m,status
+FIFO,10,0.95416887727651,1.1702778228589004e-16,0.9541688772765099,0.9541688772765101,0.9541688772765101,0.9541688772765101,0.9541688772765101,COMPUTED
+BACS,10,0.5604446201070881,1.1702778228589004e-16,0.560444620107088,0.5604446201070882,0.5604446201070882,0.5604446201070882,0.5604446201070882,COMPUTED
+BACS+,10,0.5400314356402948,1.1702778228589004e-16,0.5400314356402947,0.5400314356402949,0.5400314356402949,0.5400314356402949,0.5400314356402949,COMPUTED
