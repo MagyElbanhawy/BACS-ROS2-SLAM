@@ -87,7 +87,7 @@ def main() -> None:
         rows, command_chars = [], 0
         for i in range(args.count):
             start = time.monotonic()
-            line = send_command(RX_ADDRESS, ConstraintPayload(i, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0).encode())
+            line = send_command(RX_ADDRESS, ConstraintPayload(i, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0).encode())
             command_chars = len(line)
             t_cmd, t_ok, response = tx.command(line)
             with arrived:

@@ -30,21 +30,38 @@ Build the package on every machine: `colcon build --packages-select bacs_schedul
    - `OK_ON_ACCEPT`: `t_rcv − t_cmd` includes the airtime.
 5. **Drive mode.** Record which mode each LIMO runs in (differential, mecanum, Ackermann or track), the commanded speed and the trajectory type. The paper must describe the platform exactly as recorded.
 
-## 3. Candidate interface
+## 3. Candidate generation (`bacs_candidates`, on each robot)
 
-`bacs_sender` consumes `std_msgs/String` JSON on `/bacs/candidates`, one inter-robot constraint candidate per message:
+Inter-robot candidates come from **keyframe scan matching**, using only the robot's own LiDAR and its own local pose (its SLAM/odometry TF). Vicon is never an input.
+
+1. Every `keyframe_period_s` (2 s, as in the paper), if the robot has moved ≥ 5 cm or turned ≥ 5°, the latest scan is moved into `base_link` and stored as keyframe `kf`.
+2. **Place recognition (shortlist only).** The keyframe gets a 60-byte range-profile descriptor (median range per 6° sector). The descriptor is published on the Wi-Fi side channel `/bacs/kf_desc`. Each new keyframe is compared with the other robot's stored descriptors over all rotations. At most the 3 closest with distance < 0.12 are shortlisted. Each keyframe pair is examined once, by the robot that created the later keyframe.
+3. **On-demand points.** For a shortlisted pair, the robot requests that keyframe's points (`/bacs/kf_request` → `/bacs/kf_points`, float16).
+4. **Geometric verification.** 2-D point-to-point ICP starts from the descriptor's yaw. It is accepted only if it converges with ≥ 80% inliers (within 0.15 m) and inlier RMSE ≤ 0.05 m. Descriptors alone are ambiguous in a room this size, so ICP decides.
+   - On the synthetic test room, these thresholds recover 221/260 true pairs < 1 m apart.
+   - 38 of 488 accepted pairs (7.8%) are wrong by > 0.1 m or > 3°. That is an outlier rate for the trust-weighted back-end to handle, and it must be measured on the real data (§7).
+5. An accepted pair becomes one candidate on `/bacs/candidates`: the pose of `kf_j` (other robot) in `kf_i`'s frame, with the ICP covariance. The robot's own `bacs_sender` then schedules it over LoRa.
+
+**Sensor-derived scores (report these definitions in the paper):**
+- `predicted_trust = inlier_ratio × exp(−rmse / 0.05 m)`
+- `information_score = 1 / (1 + sqrt(σ²x + σ²y) / 0.05 m)`, from the ICP covariance
+- `pair_constraints` = the number of candidates this robot has already generated for that robot pair
+
+**Disclosure.** Descriptors and on-demand keyframe points travel over the lab Wi-Fi, not LoRa. Only scheduled constraints go over LoRa to fusion. `sidechannel_<robot>.csv` logs the size of every side-channel message, so the paper can state the exact bytes per run.
+
+**Freeze parameters before the evaluation runs.** Tune thresholds on a separate pilot session (not `HWS-1xx`) if needed, then commit them before block 1. Every attempt is logged, including rejects and why, in `candidate_attempts_<robot>.csv`. Keyframe poses go in `keyframes_<robot>.csv`.
+
+Message format (also accepted from any other front-end):
 
 ```json
-{"seq": 17, "robot_i": "limo01", "robot_j": "limo02", "t_gen_ns": 1790000000000000000,
+{"seq": 17, "robot_i": "limo01", "robot_j": "limo02", "kf_i": 120, "kf_j": 87, "t_gen_ns": 1790000000000000000,
  "predicted_trust": 0.82, "information_score": 0.41, "pair_constraints": 3,
- "dx": 1.23, "dy": -0.40, "dtheta": 0.05, "var_x": 0.01, "var_y": 0.01, "var_theta": 0.002}
+ "dx": 1.23, "dy": -0.40, "dtheta": 0.05, "var_x": 0.0004, "var_y": 0.0005, "var_theta": 0.00002}
 ```
 
-- `seq` must be unique per robot within a run.
-- A robot only transmits candidates whose `robot_i` is itself.
-- The payload (sequence, robot indices, relative pose, variances, trust, information and generation time) is packed into 39 bytes and sent as 52 base64 characters, so the on-air size is exactly 52 bytes.
+`seq` is 16-bit and must be unique per robot within a run. The 39-byte packet (sequence, robot indices, both keyframe IDs, relative pose, half-precision variances, trust and information, generation time) goes on air as exactly 52 base64 characters.
 
-**Prerequisite:** the candidate generator (the inter-robot loop-closure front-end that publishes this topic) must exist and run on the robots. It isn't in this repository.
+**Still needed for the map-alignment endpoint:** a fusion server that builds the global pose graph from each robot's keyframe chain plus the LoRa-delivered constraints (`/bacs/received`), and publishes `map → <robot>/base_link`. It is not in this repository yet.
 
 ## 4. Session design: making run pairing defensible
 
@@ -63,13 +80,14 @@ Run *k* of each policy then comes from block *k*: same hour, same battery state,
 On the server:
 ```bash
 ros2 bag record -s mcap -o HWS-101-FIFO_run01 /tf /tf_static /scan/limo01 /scan/limo02 /odom/limo01 \
-  /odom/limo02 /vicon/limo01/pose /vicon/limo02/pose /bacs/candidates /bacs/scheduler /bacs/received /map &
+  /odom/limo02 /vicon/limo01/pose /vicon/limo02/pose /bacs/candidates /bacs/scheduler /bacs/received /bacs/kf_desc /bacs/kf_request /map &
 ros2 run bacs_scheduler bacs_receiver --ros-args -p session:=HWS-101-FIFO -p run:=1 -p port:=/dev/ttyUSB0
 python3 scripts/repro/log_fused_poses.py --ros-args -p session:=HWS-101-FIFO \
   -p out:=fused_HWS-101-FIFO_run01.csv      # live, no sim time
 ```
 On each robot:
 ```bash
+ros2 run bacs_scheduler bacs_candidates --ros-args -p session:=HWS-101-FIFO -p run:=1 -p robot:=limo01 &
 ros2 run bacs_scheduler bacs_sender --ros-args -p session:=HWS-101-FIFO -p run:=1 -p policy:=FIFO \
   -p robot:=limo01 -p address:=1 -p port:=/dev/ttyUSB0
 ```
