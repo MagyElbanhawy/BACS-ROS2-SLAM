@@ -61,7 +61,27 @@ Message format (also accepted from any other front-end):
 
 `seq` is 16-bit and must be unique per robot within a run. The 39-byte packet (sequence, robot indices, both keyframe IDs, relative pose, half-precision variances, trust and information, generation time) goes on air as exactly 52 base64 characters.
 
-**Still needed for the map-alignment endpoint:** a fusion server that builds the global pose graph from each robot's keyframe chain plus the LoRa-delivered constraints (`/bacs/received`), and publishes `map → <robot>/base_link`. It is not in this repository yet.
+Each keyframe's local pose is also published on `/bacs/keyframes` (Wi-Fi). The fusion server builds the odometry chains from these.
+
+## 3b. Fusion server (`bacs_fusion`)
+
+This implements Eq. (1) and Eq. (6) with GTSAM (`pip install gtsam`), using the same conventions as `bacs_sim`:
+- **Odometry edges** between consecutive keyframes have unit weight, σ = 0.04 m / 0.04 m / 0.02 rad.
+- **Inter-robot edges** from `/bacs/received` get θ·Ω. By default Ω is the simulator's fixed Ω; `constraint_information:=icp` uses the ICP variances in the packet instead.
+- **Trust.** θ = max(0.01, max(0, 1 − (‖e‖/0.5 m)³)·exp(−γΔt)). ‖e‖ is the translational residual against the current fused estimate when the constraint arrives, and Δt = receive time − generation time. γ = ln 2 / `t_defer_s`, with a default of 155 s (0.0045 s⁻¹). **Set `t_defer_s` to the median deferral measured in the pilot session**, not the draft paper's value.
+- **Solver.** Gauss–Newton, re-run every second when new edges have arrived.
+- **Gauge.** Each robot's first keyframe has a prior at its **start pose, measured from floor marks before the run** (`start_poses`, recorded in the run sheet). LIMO-01's prior is tight; LIMO-02's has σ = 0.10 m / 0.05 rad. This matches the simulator, where all robots start in a common frame. Never set start poses from Vicon during a run.
+- **Output.** It broadcasts `map → <robot>/odom`, stamped with the node clock (the bag's `/clock` under `use_sim_time:=true`). `map → <robot>/base_link` then follows through the bag's own `odom → base_link`; broadcasting map → base_link directly would give base_link two parents.
+- **Logs.** Every inter-robot edge with its residual, age and θ goes to `fusion_edges.csv`; the mean trust goes to `fusion_summary.json`.
+
+It can run live during the experiment (server) or afterwards on the recorded bag:
+```bash
+ros2 bag play <bag> --clock
+ros2 run bacs_scheduler bacs_fusion --ros-args -p use_sim_time:=true -p session:=HWS-101-FIFO -p run:=1 \
+  -p start_poses:="[x1, y1, yaw1, x2, y2, yaw2]"
+python3 scripts/repro/log_fused_poses.py --ros-args -p use_sim_time:=true -p session:=HWS-101-FIFO \
+  -p out:=paper_results/physical/fused/fused_HWS-101-FIFO_run01.csv
+```
 
 ## 4. Session design: making run pairing defensible
 
@@ -80,7 +100,7 @@ Run *k* of each policy then comes from block *k*: same hour, same battery state,
 On the server:
 ```bash
 ros2 bag record -s mcap -o HWS-101-FIFO_run01 /tf /tf_static /scan/limo01 /scan/limo02 /odom/limo01 \
-  /odom/limo02 /vicon/limo01/pose /vicon/limo02/pose /bacs/candidates /bacs/scheduler /bacs/received /bacs/kf_desc /bacs/kf_request /map &
+  /odom/limo02 /vicon/limo01/pose /vicon/limo02/pose /bacs/candidates /bacs/scheduler /bacs/received /bacs/keyframes /bacs/kf_desc /bacs/kf_request /map &
 ros2 run bacs_scheduler bacs_receiver --ros-args -p session:=HWS-101-FIFO -p run:=1 -p port:=/dev/ttyUSB0
 python3 scripts/repro/log_fused_poses.py --ros-args -p session:=HWS-101-FIFO \
   -p out:=fused_HWS-101-FIFO_run01.csv      # live, no sim time
@@ -108,6 +128,8 @@ python scripts/join_radio_logs.py hardware/raw/HWS-101-FIFO/logs \
   hardware/raw/HWS-101-FIFO/bacs_scheduler_log_HWS-101-FIFO_FIFO.csv   # prints sent/received/lost per run
 python scripts/validate_hardware.py
 python scripts/repro/check_fused_poses.py 'paper_results/physical/fused/fused_*.csv'   # must PASS
+python scripts/repro/compute_map_alignment.py --poses 'paper_results/physical/fused/fused_*.csv'
+python scripts/parse_hardware_logs.py          # Table 6 -> paper_results/physical/hardware_metrics.csv
 python scripts/reproduce_physical.py && python scripts/reproduce_statistics.py && python scripts/update_report.py
 ```
 

@@ -63,3 +63,22 @@ Output: `radio_per_run.csv` and `radio_summary.csv`. Per-packet time-on-air uses
 | `est_x`, `est_y`, `est_yaw` | `map -> <robot>/base_link` (m, rad) |
 | `tf_stamp_ns`, `vicon_stamp_ns` | Timestamps of the transform and of the Vicon message used |
 | `vicon_x`, `vicon_y`, `vicon_yaw` | Vicon pose (m, rad) |
+
+## Table 6 (`scripts/parse_hardware_logs.py` → `hardware_metrics.csv`)
+
+Only measured sessions (`HWS-1xx`) get values; HWS-002/003/005 are `NOT_MEASURED_LEGACY`. Delivered means sent and received by the server.
+
+| Column | Definition |
+|---|---|
+| `map_alignment_rmse_mean_m` / `_sd_m` | Mean / SD over runs of `map_alignment_per_run.csv` |
+| `median_packet_age_s` | median of `t_rx − t_gen`, delivered packets |
+| `median_deferral_s` | median of `t_selected − t_gen`, delivered packets |
+| `median_channel_delay_s` | median of `t_rx − t_tx`, delivered packets (`t_tx` = `AT+SEND` written); interpret with the `+OK` calibration |
+| `median_rx_after_ok_s` | median of `t_rx − t_ok` |
+| `generated_per_session`, `transmitted_per_session`, `received_per_session`, `*_per_run_median` | Counts, always labelled per session or per run |
+| `mean_server_trust` | mean θᵢⱼ over all inter-robot edges the fusion server added (`fusion_edges.csv`) |
+| `airtime_utilisation_pct` | 100 × sent packets × 102.7 ms ÷ (1% × measured run duration), per robot and run, averaged. The run duration is the sender's measured lifetime from its clock snapshots, never a value chosen afterwards. |
+| `airtime_fraction_of_run_pct` | the same airtime ÷ run duration |
+| `scheduler_overhead_ms_mean` / `_p95` | time to rank the queue at each transmission |
+
+For scale: ~14 packets per 720 s run use 14 × 0.1027 s ÷ 7.2 s ≈ 20% of one robot's 1% budget. A figure of 97–98% would need ~68 packets per robot per run.
