@@ -1,0 +1,8 @@
+RYLR998 +OK Calibration Test
+===========================
+Total Packets: 100
+OK_AFTER_TRANSMISSION: 96
+OK_ON_ACCEPT: 4
+Final Classification: OK_AFTER_TRANSMISSION
+
+This confirms that +OK is returned after the packet has been fully transmitted over the air.
