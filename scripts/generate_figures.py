@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def main() -> None:
-    out = ROOT / "figures" / "generated"; out.mkdir(parents=True, exist_ok=True)
+    out = ROOT / "figures" / "extract"; out.mkdir(parents=True, exist_ok=True)
     with (ROOT / "paper_results" / "physical" / "timing_per_packet.csv").open(newline="", encoding="utf-8") as handle:
         rows = list(csv.DictReader(handle))
     policies = sorted({x["policy"] for x in rows})
@@ -104,3 +104,4 @@ def simulation_figures(out: Path) -> None:
 
 if __name__ == "__main__":
     main()
+
