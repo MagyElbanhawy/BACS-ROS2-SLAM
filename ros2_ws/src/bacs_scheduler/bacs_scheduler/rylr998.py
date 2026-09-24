@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from typing import IO, Callable, Protocol
 
 # 39 bytes -> exactly 52 base64 characters on air (no padding, no ',' or CR/LF).
-PAYLOAD_FORMAT = "<IBBffffffeeIx"
+PAYLOAD_FORMAT = "<HBBfffeeeeeIIIx"
 PAYLOAD_STRUCT = struct.Struct(PAYLOAD_FORMAT)
 ON_AIR_BYTES = 52
 assert PAYLOAD_STRUCT.size == 39
@@ -30,7 +30,10 @@ assert PAYLOAD_STRUCT.size == 39
 
 @dataclass(frozen=True)
 class ConstraintPayload:
-    """What one packet carries. ``gen_ms`` is the low 32 bits of t_gen in ms."""
+    """What one packet carries: an edge from keyframe ``kf_i`` of robot i to keyframe
+    ``kf_j`` of robot j (pose of kf_j in kf_i's frame). Variances, trust and
+    information are half precision; ``seq`` is 16-bit; ``gen_ms`` is the low 32 bits
+    of t_gen in ms."""
 
     seq: int
     robot_i: int
@@ -43,12 +46,14 @@ class ConstraintPayload:
     var_theta: float
     predicted_trust: float
     information_score: float
+    kf_i: int
+    kf_j: int
     gen_ms: int
 
     def encode(self) -> str:
-        raw = PAYLOAD_STRUCT.pack(self.seq & 0xFFFFFFFF, self.robot_i, self.robot_j, self.dx, self.dy,
-                                  self.dtheta, self.var_x, self.var_y, self.var_theta, self.predicted_trust,
-                                  self.information_score, self.gen_ms & 0xFFFFFFFF)
+        raw = PAYLOAD_STRUCT.pack(self.seq & 0xFFFF, self.robot_i, self.robot_j, self.dx, self.dy, self.dtheta,
+                                  self.var_x, self.var_y, self.var_theta, self.predicted_trust,
+                                  self.information_score, self.kf_i, self.kf_j, self.gen_ms & 0xFFFFFFFF)
         return base64.b64encode(raw).decode("ascii")
 
     @classmethod

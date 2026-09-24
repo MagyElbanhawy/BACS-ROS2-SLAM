@@ -19,7 +19,7 @@ ROBOTS = ["limo01", "limo02"]
 
 
 def payload(seq: int = 7) -> ConstraintPayload:
-    return ConstraintPayload(seq, 0, 1, 1.5, -0.25, 0.1, 0.01, 0.02, 0.003, 0.75, 0.5, 123456)
+    return ConstraintPayload(seq, 0, 1, 1.5, -0.25, 0.1, 0.01, 0.02, 0.003, 0.75, 0.5, 40, 12, 123456)
 
 
 def test_payload_is_52_bytes_on_air_and_round_trips() -> None:
@@ -28,6 +28,7 @@ def test_payload_is_52_bytes_on_air_and_round_trips() -> None:
     decoded = ConstraintPayload.decode(text)
     assert decoded.seq == 7 and decoded.robot_j == 1 and decoded.dx == pytest.approx(1.5)
     assert decoded.predicted_trust == pytest.approx(0.75, abs=1e-3)
+    assert (decoded.kf_i, decoded.kf_j) == (40, 12) and decoded.var_theta == pytest.approx(0.003, rel=1e-3)
 
 
 def test_parse_rcv_uses_declared_length() -> None:
@@ -93,7 +94,7 @@ class Clock:
 
 def candidate(seq: int, t_gen: int, trust: float = 0.9, info: float = 0.5) -> dict:
     return {"seq": seq, "robot_i": "limo01", "robot_j": "limo02", "t_gen_ns": t_gen, "predicted_trust": trust,
-            "information_score": info, "pair_constraints": 0, "dx": 1, "dy": 0, "dtheta": 0,
+            "information_score": info, "pair_constraints": 0, "kf_i": seq, "kf_j": seq + 1, "dx": 1, "dy": 0, "dtheta": 0,
             "var_x": 0.01, "var_y": 0.01, "var_theta": 0.001}
 
 
@@ -159,7 +160,7 @@ def test_join_keeps_lost_packets_blank_and_passes_validation(tmp_path: Path) -> 
     with (run_dir / "received_server.csv").open("w", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=RECEIVED_FIELDS); writer.writeheader()
         for seq in (0, 2):  # packet 1 is lost on air
-            text = ConstraintPayload(seq, 0, 1, 1, 0, 0, .01, .01, .001, .9, .5, 0).encode()
+            text = ConstraintPayload(seq, 0, 1, 1, 0, 0, .01, .01, .001, .9, .5, 3, 4, 0).encode()
             writer.writerow(received_row("HWS-101-FIFO", 1, clock.t + seq, parse_rcv(f"+RCV=1,52,{text},-90,5"),
                                          {1: "limo01"}, ROBOTS))
     joined, report = join_run(run_dir)

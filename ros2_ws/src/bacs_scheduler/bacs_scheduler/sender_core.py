@@ -17,7 +17,7 @@ from .rylr998 import ON_AIR_BYTES, ConstraintPayload, send_command
 from .scheduler import Constraint, DutyCycleBudget, Scheduler, lora_airtime_s
 
 CANDIDATE_LOG_FIELDS = [
-    "session", "run", "policy", "robot", "seq", "robot_i", "robot_j", "t_gen_ns", "t_enqueued_ns",
+    "session", "run", "policy", "robot", "seq", "robot_i", "robot_j", "kf_i", "kf_j", "t_gen_ns", "t_enqueued_ns",
     "t_selected_ns", "t_cmd_ns", "t_ok_ns", "radio_response", "payload_bytes", "airtime_s",
     "predicted_trust", "information_score", "pair_constraints", "status",
 ]
@@ -58,6 +58,8 @@ class SenderCore:
         """Add a candidate from the front-end (see docs/HARDWARE_EXPERIMENT_V2.md for fields)."""
         now = self.clock_ns()
         seq = int(candidate["seq"])
+        if not 0 <= seq <= 0xFFFF:
+            raise ValueError(f"seq {seq} does not fit the 16-bit payload field")
         constraint = Constraint(seq, int(candidate["t_gen_ns"]), ON_AIR_BYTES, float(candidate["predicted_trust"]),
                                 float(candidate["information_score"]), candidate["robot_i"], candidate["robot_j"],
                                 int(candidate.get("pair_constraints", 0)))
@@ -65,9 +67,10 @@ class SenderCore:
                                     float(candidate["dx"]), float(candidate["dy"]), float(candidate["dtheta"]),
                                     float(candidate["var_x"]), float(candidate["var_y"]), float(candidate["var_theta"]),
                                     constraint.predicted_trust, constraint.information_score,
-                                    constraint.generated_ns // 1_000_000)
+                                    int(candidate["kf_i"]), int(candidate["kf_j"]), constraint.generated_ns // 1_000_000)
         row = {"session": self.session, "run": self.run, "policy": self.policy, "robot": self.robot, "seq": seq,
-               "robot_i": constraint.robot_i, "robot_j": constraint.robot_j, "t_gen_ns": constraint.generated_ns,
+               "robot_i": constraint.robot_i, "robot_j": constraint.robot_j, "kf_i": payload.kf_i,
+               "kf_j": payload.kf_j, "t_gen_ns": constraint.generated_ns,
                "t_enqueued_ns": now, "payload_bytes": ON_AIR_BYTES, "airtime_s": self.airtime_s,
                "predicted_trust": constraint.predicted_trust, "information_score": constraint.information_score,
                "pair_constraints": constraint.pair_constraints}
