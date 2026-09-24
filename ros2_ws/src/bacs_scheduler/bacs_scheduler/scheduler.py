@@ -95,11 +95,15 @@ class Scheduler:
             base *= 1 + self.observability_weight * item.observability(self.observability_reference)
         return base / lora_airtime_s(item.payload_bytes)
 
-    def select(self, candidates: Iterable[Constraint], now_ns: int) -> list[Constraint]:
+    def rank(self, candidates: Iterable[Constraint], now_ns: int) -> list[Constraint]:
+        """Return admissible candidates in transmission order without touching the budget."""
         eligible = [c for c in candidates if c.predicted_trust >= self.trust_threshold]
-        ordered = sorted(eligible, key=lambda c: c.sequence) if self.policy == "FIFO" else sorted(
+        return sorted(eligible, key=lambda c: c.sequence) if self.policy == "FIFO" else sorted(
             eligible, key=lambda c: (-self.score(c, now_ns), c.sequence)
         )
+
+    def select(self, candidates: Iterable[Constraint], now_ns: int) -> list[Constraint]:
+        ordered = self.rank(candidates, now_ns)
         selected: list[Constraint] = []
         now_s = now_ns / 1e9
         for item in ordered:
