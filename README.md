@@ -24,7 +24,7 @@ The simulation is deterministic and explicitly separate from physical evidence. 
 | `analysis/` | Physical and statistical analysis |
 | `simulation/` | Deterministic simulated experiments |
 | `paper_results/` | Generated CSV outputs |
-| `figures/generated/` | Generated figures |
+| `figures/extract/` | Extracted figures |
 | `docs/` | Platform, protocol, data dictionary, and reproduction guidance |
 
 ## Reproduction
@@ -41,3 +41,4 @@ python -m pytest -q
 ```
 
 Or run `python scripts/reproduce_all.py`. See [REPRODUCIBILITY_REPORT.md](REPRODUCIBILITY_REPORT.md) for result status and [PAPER_TRACEABILITY.md](PAPER_TRACEABILITY.md) for the claim-to-evidence chain.
+
