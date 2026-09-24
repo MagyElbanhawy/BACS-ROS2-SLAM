@@ -1,0 +1,4 @@
+path,status,records,runs
+/home/user/BACS-ROS2-SLAM/hardware/raw/HWS-002-FIFO/bacs_scheduler_log_HWS-002-FIFO_FIFO_20260714_094217.csv,VALID,2086,10
+/home/user/BACS-ROS2-SLAM/hardware/raw/HWS-003-BACS/bacs_scheduler_log_HWS-003-BACS_BACS_20260715_101342.csv,VALID,2056,10
+/home/user/BACS-ROS2-SLAM/hardware/raw/HWS-005-BACS+/bacs_scheduler_log_HWS-005-BACS+_BACS+_20260716_095508.csv,VALID,2090,10

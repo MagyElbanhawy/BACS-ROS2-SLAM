@@ -1,0 +1,13 @@
+# BACS_v10 raw-data provenance
+archive_date_utc=2026-09-23T04:27:45Z
+lab_access_log_ref=NM_FCS_LAB_LOG_2026_07
+equipment_booking_ref=NM_FCS_EQ_BOOK_2026_07
+coauthor_testimony_ref=COAUTHOR_CONFIRM_BACS_V10
+lora_module=RYLR998
+lora_freq_mhz=868
+lora_sf=7
+lora_bw_khz=125
+lora_cr=4/5
+lora_payload_bytes=52
+median_deferral_s=154
+channel_delay_s=0.17

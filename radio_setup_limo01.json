@@ -1,0 +1,27 @@
+{
+  "port": "mock_port",
+  "address": 1,
+  "status": "PASS (MOCK)",
+  "commands": [
+    {
+      "cmd": "AT+ADDRESS=1",
+      "resp": "+OK"
+    },
+    {
+      "cmd": "AT+NETWORKID=18",
+      "resp": "+OK"
+    },
+    {
+      "cmd": "AT+BAND=868000000",
+      "resp": "+OK"
+    },
+    {
+      "cmd": "AT+PARAMETER=7,7,1,8",
+      "resp": "+OK"
+    },
+    {
+      "cmd": "AT+CRFOP=14",
+      "resp": "+OK"
+    }
+  ]
+}

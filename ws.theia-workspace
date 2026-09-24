@@ -1,0 +1,25 @@
+{
+  "folders": [
+    {
+      "path": "file:///home/user"
+    },
+    {
+      "path": ""
+    }
+  ],
+  "settings": {
+    "workbench.editor.highlightModifiedTabs": true,
+    "workbench.colorTheme": "dark",
+    "workbench.iconTheme": "theia-file-icons",
+    "workbench.silentNotifications": true,
+    "files.associations": {
+      "CMakeLists.txt": "makefile",
+      "*.xacro": "xml"
+    },
+    "explorer.autoReveal": true,
+    "search.lineNumbers": true,
+    "clangd.arguments": [
+      "--background-index"
+    ]
+  }
+}
