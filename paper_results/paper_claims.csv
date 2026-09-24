@@ -1,0 +1,27 @@
+claim_id,description,paper_value,unit,manuscript_location,check
+map_rmse_fifo,FIFO map-alignment RMSE (mean),0.48,m,Sec. 7.3 / Abstract,approx
+map_rmse_bacs,BACS map-alignment RMSE (mean),0.28,m,Sec. 7.3,approx
+map_rmse_bacsplus,BACS+ map-alignment RMSE (mean),0.27,m,Sec. 7.3 / Abstract,approx
+map_improvement,BACS+ vs FIFO relative reduction of mean RMSE,0.438,fraction,Sec. 7.3 / Abstract,approx
+map_wilcoxon_p,BACS+ vs FIFO one-sided paired Wilcoxon p,0.000977,p,Sec. 7.3 / Abstract,approx
+map_cliffs_delta,BACS+ vs FIFO Cliff's delta,-0.81,delta,Sec. 7.3 / Abstract,approx
+age_fifo,FIFO median packet age (sent packets),162,s,Sec. 7.4,approx
+deferral_fifo,FIFO median scheduling deferral (sent packets),161,s,Sec. 7.4,approx
+channel_fifo,FIFO median channel delay,0.18,s,Sec. 7.4,approx
+age_bacsplus,BACS+ median packet age (sent packets),155,s,Sec. 7.4,approx
+deferral_bacsplus,BACS+ median scheduling deferral (sent packets),154,s,Sec. 7.4 / Abstract,approx
+channel_bacsplus,BACS+ median channel delay,0.17,s,Sec. 7.4 / Abstract,approx
+deferral_channel_ratio,BACS+ deferral/channel ratio,906,ratio,Sec. 7.4 / Abstract,approx
+generated_per_session,Candidates generated per session (BACS+),2100,packets,Sec. 7.4,approx
+sent_per_run,Packets transmitted per run (BACS+ median),14,packets,Sec. 7.4,approx
+airtime_bacsplus,BACS+ airtime utilisation,0.975,fraction,Sec. 7.4,approx
+sim_reduction_min,Sim S8: smallest BACS+ vs FIFO alignment-RMSE reduction (N=2-5),21.3,%,Abstract,approx
+sim_reduction_max,Sim S8: largest BACS+ vs FIFO alignment-RMSE reduction (N=2-5),48.1,%,Abstract,approx
+sim_reduction_n5,Sim S8: BACS+ vs FIFO alignment-RMSE reduction at N=5,28.7,%,Abstract,approx
+sim_p_n5,Sim S8: BACS+ vs FIFO paired Wilcoxon p at N=5,0.00073,p,Abstract,approx
+sim_delta_n5,Sim S8: BACS+ vs FIFO Cliff's delta at N=5,-0.53,delta,Abstract,approx
+sim_wins_n2,Sim S8: seeds where BACS+ beats FIFO at N=2,28,of 30,Sec. 6 / Fig. 8,approx
+sim_wins_n3,Sim S8: seeds where BACS+ beats FIFO at N=3,30,of 30,Sec. 6 / Fig. 8,approx
+sim_wins_n4,Sim S8: seeds where BACS+ beats FIFO at N=4,22,of 30,Sec. 6 / Fig. 8,approx
+sim_wins_n5,Sim S8: seeds where BACS+ beats FIFO at N=5,23,of 30,Sec. 6 / Fig. 8,approx
+sim_pose_min_p,Sim S8: smallest pose-RMSE paired p over policy pairs and N (paper: all > 0.11),0.11,p,Sec. 6 / Fig. 6,greater_than

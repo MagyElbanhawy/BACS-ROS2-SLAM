@@ -10,13 +10,33 @@ import csv
 import hashlib
 import json
 import math
+import re
 import sqlite3
 import statistics
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Iterable
 
-POLICIES = {"HWS-002-FIFO": "FIFO", "HWS-003-BACS": "BACS", "HWS-005-BACS+": "BACS+"}
+SESSION_PATTERN = re.compile(r"^HWS-\d+-(FIFO|BACS\+?)$")
+
+
+class _Policies(dict):
+    """Session -> policy, derived from the session name (``HWS-<n>-<POLICY>``)."""
+
+    def __missing__(self, session: str) -> str:
+        match = SESSION_PATTERN.match(session)
+        if not match:
+            raise KeyError(session)
+        return match.group(1)
+
+    def __contains__(self, session: object) -> bool:
+        return isinstance(session, str) and SESSION_PATTERN.match(session) is not None
+
+    def get(self, session: str, default: str = "") -> str:  # type: ignore[override]
+        return self[session] if session in self else default
+
+
+POLICIES = _Policies()
 SCHEDULER_FIELDS = [
     "session", "run", "seq", "policy", "robot", "t_gen_ns", "t_selected_ns",
     "t_tx_ns", "t_rx_ns", "deferral_ns", "channel", "rssi_dbm", "snr_db", "payload_hex",
@@ -43,7 +63,7 @@ def sha256(path: Path) -> str:
 def write_csv(path: Path, fieldnames: list[str], rows: Iterable[dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fieldnames, extrasaction="ignore")
+        writer = csv.DictWriter(handle, fieldnames=fieldnames, extrasaction="ignore", lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
 
@@ -80,7 +100,10 @@ def validate_scheduler(path: Path) -> dict[str, Any]:
             try:
                 seq = int(row["seq"])
                 generated, selected = int(row["t_gen_ns"]), int(row["t_selected_ns"])
-                if selected < generated or int(row["deferral_ns"]) != selected - generated or seq < 0:
+                if selected == 0:  # never selected (dropped, rejected or pending): no deferral exists
+                    if row["deferral_ns"] != "":
+                        raise ValueError("deferral recorded for an unselected candidate")
+                elif selected < generated or int(row["deferral_ns"]) != selected - generated or seq < 0:
                     raise ValueError("inconsistent timestamps")
                 current = (int(row["run"]), seq)
                 if prior is not None and current <= prior:
@@ -221,15 +244,22 @@ def lora_airtime_s(payload: int, sf: int = 7, bandwidth_hz: int = 125000, cr: in
     return (8 + 4.25 + payload_symbols) * symbol
 
 
+def duty_cycle(root: Path) -> float:
+    import yaml
+    with (root / "config" / "lora.yaml").open(encoding="utf-8") as handle:
+        return float(yaml.safe_load(handle)["regulatory"]["duty_cycle"])
+
+
 def physical_analysis(root: Path) -> None:
     output = root / "paper_results" / "physical"; output.mkdir(parents=True, exist_ok=True)
+    delta = duty_cycle(root)
     packet_rows, run_rows, radio_rows = [], [], []
     run_data: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     for path in sorted((root / "hardware" / "raw").rglob("bacs_scheduler_*.csv")):
         with path.open(newline="", encoding="utf-8") as handle:
             for row in csv.DictReader(handle):
                 generated, selected, tx, rx = (int(row[x]) for x in ("t_gen_ns", "t_selected_ns", "t_tx_ns", "t_rx_ns"))
-                selected_row = {**row, "deferral_s": (selected - generated) / 1e9,
+                selected_row = {**row, "deferral_s": (selected - generated) / 1e9 if selected else "",
                                 "channel_delay_s": (rx - tx) / 1e9 if tx and rx else "",
                                 "packet_age_s": (rx - generated) / 1e9 if rx else "",
                                 "airtime_s": lora_airtime_s(int(row.get("payload_bytes", 52))),
@@ -243,44 +273,70 @@ def physical_analysis(root: Path) -> None:
     bag_paths = {session_for(path): path for path in (root / "hardware" / "raw").rglob("*.db3")}
     for (policy, run), records in sorted(run_data.items()):
         sent = [row for row in records if row["sent"] == "1"]
+        heard = [row for row in sent if row["rssi_dbm"] != ""]  # RSSI/SNR exist only for received packets
         start, end = min(int(r["t_gen_ns"]) for r in records), max(int(r["t_gen_ns"]) for r in records)
         duration = (end - start) / 1e9
-        defer = [float(r["deferral_s"]) for r in records]
+        defer = [float(r["deferral_s"]) for r in records if r["deferral_s"] != ""]
         session = records[0]["session"]
-        with sqlite3.connect(f"file:{bag_paths[session].as_posix()}?mode=ro", uri=True) as bag:
-            bag_records = bag.execute("SELECT COUNT(*) FROM messages WHERE timestamp BETWEEN ? AND ?", (start, end)).fetchone()[0]
+        bag_records: int | str = ""
+        if session in bag_paths:
+            with sqlite3.connect(f"file:{bag_paths[session].as_posix()}?mode=ro", uri=True) as bag:
+                bag_records = bag.execute("SELECT COUNT(*) FROM messages WHERE timestamp BETWEEN ? AND ?", (start, end)).fetchone()[0]
         run_rows.append({"policy": policy, "run": run, "start_timestamp": start, "end_timestamp": end,
                          "scheduler_records": len(records),
-                         "vicon_records_limo01": sum(start <= ts <= end for ts in vicon_by_session_robot[(session, "limo01")]),
-                         "vicon_records_limo02": sum(start <= ts <= end for ts in vicon_by_session_robot[(session, "limo02")]),
+                         "vicon_records_limo01": sum(start <= ts <= end for ts in vicon_by_session_robot.get((session, "limo01"), [])),
+                         "vicon_records_limo02": sum(start <= ts <= end for ts in vicon_by_session_robot.get((session, "limo02"), [])),
                          "bag_records": bag_records, "duration_s": duration,
                          "transmitted_constraints": len(sent), "generated_constraints": len(records),
-                         "deferral_mean_s": statistics.fmean(defer), "status": "SEGMENTED_FROM_LOGGED_RUN"})
-        radio_rows.append({"policy": policy, "run": run, "packet_count": len(sent),
+                         "deferral_mean_s": statistics.fmean(defer) if defer else "", "status": "SEGMENTED_FROM_LOGGED_RUN"})
+        airtime = sum(float(r["airtime_s"]) for r in sent)
+        transmitters = len({r["robot"] for r in records})
+        radio_rows.append({"policy": policy, "run": run, "packets_generated_per_run": len(records),
+                           "packets_sent_per_run": len(sent),
                            "payload_bytes_mean": statistics.fmean([float(r["payload_bytes"]) for r in sent]) if sent else "",
-                           "rssi_dbm_mean": statistics.fmean([float(r["rssi_dbm"]) for r in sent]) if sent else "",
-                           "snr_db_mean": statistics.fmean([float(r["snr_db"]) for r in sent]) if sent else "",
-                           "airtime_s": sum(float(r["airtime_s"]) for r in sent),
-                           "airtime_utilisation": sum(float(r["airtime_s"]) for r in sent) / duration if duration else ""})
+                           "packets_received_per_run": len(heard),
+                           "rssi_dbm_mean": statistics.fmean([float(r["rssi_dbm"]) for r in heard]) if heard else "",
+                           "snr_db_mean": statistics.fmean([float(r["snr_db"]) for r in heard]) if heard else "",
+                           "airtime_s": airtime, "transmitters": transmitters,
+                           "airtime_fraction_of_run": airtime / duration if duration else "",
+                           "airtime_fraction_of_duty_budget": airtime / (delta * duration * transmitters) if duration else ""})
     write_csv(output / "timing_per_packet.csv", list(packet_rows[0]), packet_rows)
     write_csv(output / "timing_per_run.csv", list(run_rows[0]), run_rows)
     write_csv(output / "run_segmentation.csv", list(run_rows[0]), run_rows)
     timing_summary = []
     for policy in sorted({r["policy"] for r in packet_rows}):
-        for metric in ("deferral_s", "channel_delay_s", "packet_age_s"):
-            values = [float(r[metric]) for r in packet_rows if r["policy"] == policy and r[metric] != ""]
-            timing_summary.append({"policy": policy, "metric": metric, **quantiles(values), "status": "COMPUTED" if values else "NOT_RECORDED"})
+        for metric, sent_only in (("deferral_s", False), ("deferral_s", True), ("channel_delay_s", True), ("packet_age_s", True)):
+            values = [float(r[metric]) for r in packet_rows if r["policy"] == policy and r[metric] != ""
+                      and (not sent_only or r["sent"] == "1")]
+            name = "deferral_sent_s" if metric == "deferral_s" and sent_only else metric
+            timing_summary.append({"policy": policy, "metric": name, **quantiles(values), "status": "COMPUTED" if values else "NOT_RECORDED"})
     write_csv(output / "timing_summary.csv", list(timing_summary[0]), timing_summary)
     write_csv(output / "radio_per_packet.csv", list(packet_rows[0]), packet_rows)
     write_csv(output / "radio_per_run.csv", list(radio_rows[0]), radio_rows)
     radio_summary = []
     for policy in sorted({r["policy"] for r in radio_rows}):
-        for metric in ("packet_count", "rssi_dbm_mean", "snr_db_mean", "airtime_utilisation"):
+        for metric in ("packets_generated_per_run", "packets_sent_per_run", "packets_received_per_run", "rssi_dbm_mean", "snr_db_mean",
+                       "airtime_fraction_of_run", "airtime_fraction_of_duty_budget"):
             values = [float(r[metric]) for r in radio_rows if r["policy"] == policy and r[metric] != ""]
             radio_summary.append({"policy": policy, "metric": metric, **quantiles(values), "status": "COMPUTED"})
     write_csv(output / "radio_summary.csv", list(radio_summary[0]), radio_summary)
+    counts = []
+    for policy in sorted({r["policy"] for r in radio_rows}):
+        runs = [r for r in radio_rows if r["policy"] == policy]
+        counts.append({"policy": policy, "runs": len(runs),
+                       "packets_generated_per_session": sum(r["packets_generated_per_run"] for r in runs),
+                       "packets_sent_per_session": sum(r["packets_sent_per_run"] for r in runs),
+                       "packets_received_per_session": sum(r["packets_received_per_run"] for r in runs),
+                       "packets_generated_per_run_median": statistics.median(r["packets_generated_per_run"] for r in runs),
+                       "packets_sent_per_run_median": statistics.median(r["packets_sent_per_run"] for r in runs)})
+    write_csv(output / "session_counts.csv", list(counts[0]), counts)
+    fused = sorted((output / "fused").glob("fused_*.csv"))
+    if fused:
+        from analysis.physical.map_alignment import run as map_alignment
+        map_alignment(fused, output / "run_segmentation.csv", output)
+        return
     map_rows = [{"policy": policy, "metric": "map_alignment_rmse_m", "status": "NOT_COMPUTABLE",
-                 "reason": "Raw evidence contains Vicon poses but no fused-map estimate or estimated trajectory required by the metric."}
+                 "reason": "No paper_results/physical/fused/fused_*.csv; log them with scripts/repro/log_fused_poses.py."}
                 for policy in ("FIFO", "BACS", "BACS+")]
     write_csv(output / "map_alignment_per_run.csv", list(map_rows[0]), map_rows)
     write_csv(output / "map_alignment_summary.csv", list(map_rows[0]), map_rows)

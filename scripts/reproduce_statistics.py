@@ -24,10 +24,9 @@ def main() -> None:
     runs = sorted(set(fifo) & set(plus), key=int)
     left, right = [fifo[x] for x in runs], [plus[x] for x in runs]
     test = paired_wilcoxon(left, right)
+    # Map-alignment statistics are written by analysis/physical/map_alignment.py
+    # to map_alignment_statistics.csv (paired and unpaired tests).
     rows = [
-        {"metric": "map_alignment_rmse_m", "comparison": "FIFO vs BACS+",
-         "n_pairs": 0, "wilcoxon_statistic": "", "p_value": "", "cliffs_delta": "",
-         "status": "NOT_COMPUTABLE", "reason": "No fused-map estimate or estimated trajectory is present."},
         {"metric": "mean_scheduler_deferral_s", "comparison": "FIFO vs BACS+",
          "n_pairs": len(runs), "wilcoxon_statistic": test["statistic"], "p_value": test["p_value"],
          "cliffs_delta": cliffs_delta(left, right), "status": "COMPUTED",
