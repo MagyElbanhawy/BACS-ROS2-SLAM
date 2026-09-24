@@ -33,8 +33,15 @@ Each of these needs an explanation in the dataset documentation, or needs checki
 5. **Deferral** has the same log-normal shape (median ≈154 s, σ ≈ 0.49, capped at 600 s) under all three policies, which matches the protocol's "log-normal, σ = 0.5". Under FIFO, about half of consecutive candidates are selected out of generation order.
 6. `support/experiment_protocol.md` gives airtime as ≈92 ms. The Semtech formula for the configured link gives 102.7 ms, which matches the manuscript.
 
-If any of these fields were produced by a placeholder or simulator rather than measured, they have to be labelled that way, and the matching claims (H5, the deferral dominance result, Table 6) have to be re-derived from measured data or removed.
+### Finding (2026-09-24): the timing fields are not radio measurements
+
+- The only scheduler ROS node in the project's repositories (`MagyElbanhawy/BACS-ROS2_untested`, `ros2_ws/src/bacs_scheduler/bacs_scheduler/bacs_scheduler_node.py`, around lines 118–142) never talks to the RYLR998. It sleeps for a fixed "selection delay" and "transmission delay", then sleeps for `0.005 + random.uniform(0, 0.045)` s as the "network roundtrip", and logs those clock readings as `t_selected`, `t_tx` and `t_rx`.
+- The same repository contains a different version of the same three sessions (`hardware/raw/BACS_v10_raw/...`). Its sessions start at 09:30:00 on 14/15/16 Jul (here 09:42:17, 10:13:42 and 09:55:08). They have ≈80 scheduler rows per session (here ≈2,090) and deferrals of a few milliseconds (here ≈154 s). Two different logs can't both be the recording of the same session.
+
+**Consequence.** The scheduler logs in `hardware/raw/` can't be used as measurements of channel delay, deferral, RSSI/SNR or airtime. H5 (deferral dominance, the 906× ratio), Sec. 7.4 and Table 6 have no measured basis. The Vicon ground truth is exact sinusoids (item 1), so the physical map-alignment result (Sec. 7.3, abstract, H4) also can't be supported from this dataset. That holds whatever SLAM replay produces from these bags.
+
+**What would fix it.** Either run a new physical experiment with a scheduler node that timestamps real RYLR998 events (`AT+SEND` → `+OK` for `t_tx`, `+RCV` for `t_rx`, and RSSI/SNR parsed from `+RCV` on sent packets only), or remove the physical-validation claims and present the paper as simulation-only. Item 2 (drive type) only matters for a new experiment. It should then be recorded in the protocol: drive mode, commanded speed and trajectory.
 
 ## 5. Simulation outputs
 
-See `simulation/README.md`. The committed `simulation/run.py` can't produce Tables 4–7 or Figs 2–9.
+See `simulation/README.md`. The committed `simulation/run.py` can't produce Tables 4–7 or Figs 2–9. The simulator that can (`bacs_sim/`) is in `MagyElbanhawy/ros2_BACS_untested`, and its frozen S8 results match the manuscript's simulation numbers. It still has to be copied in and re-run to confirm those numbers reproduce.

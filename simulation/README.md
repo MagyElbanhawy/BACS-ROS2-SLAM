@@ -26,6 +26,16 @@ It also relies on modules the manuscript cites that aren't in this repo (`experi
 - per-seed Spearman ρ of the base and observability surrogates against exact incremental information (S7-C)
 - temporal-decay and observability-weight ablations (S9, Fig. 9)
 
+### Where the real simulator is
+
+`MagyElbanhawy/ros2_BACS_untested` (commit `2473f1b`, 2026-09-22) contains the simulator the manuscript describes:
+
+- `bacs_sim/`: world, agents, LoRa, trust, information gain, observability, SE(2) pose graph and experiments
+- `scripts/run_s8_30seed.py` and `generate_paper_results.py` (the latter is in `BACS-ROS2_untested`)
+- the frozen `paper_results/` CSVs (`s8_30seed_raw.csv`: 480 rows = 4 team sizes × 30 seeds × 4 arms; `s7c_*`, `s9_*`)
+
+The frozen S8 summary matches the manuscript: FIFO → BACS+ (0.30/6) alignment-RMSE reduction of 46.0% at N=2, 48.1% at N=3, 21.3% at N=4 and 28.7% at N=5. So this is the code to commit here. Nobody has yet confirmed that re-running it reproduces the frozen CSVs, so do that when you import it.
+
 Adding columns to `run.py` won't produce these values. Only the simulator that produced the manuscript numbers can. That simulator has to be committed here with a single entry point that writes one row per (N, seed, policy) to `paper_results/simulation/raw/`. Otherwise the simulation results must be regenerated with a new simulator, and the manuscript updated to whatever that produces.
 
 ### Commands (current runner)
