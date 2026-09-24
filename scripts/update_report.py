@@ -1,45 +1,93 @@
 #!/usr/bin/env python3
-"""Render the reviewer report from generated CSV outputs, never embedded results."""
+"""Render the reproducibility report from generated CSVs.
+
+Draft-manuscript values live in ``paper_results/paper_claims.csv`` and are only
+compared against, never used to compute anything.
+"""
 from __future__ import annotations
 
 import csv
+import math
 from pathlib import Path
+from typing import Callable
 
 ROOT = Path(__file__).resolve().parents[1]
+PHYSICAL = ROOT / "paper_results" / "physical"
+TOLERANCE = 0.05  # relative difference still reported as MATCH
 
 
 def rows(path: Path) -> list[dict[str, str]]:
+    if not path.exists():
+        return []
     with path.open(newline="", encoding="utf-8") as handle:
         return list(csv.DictReader(handle))
 
 
-def value(records: list[dict[str, str]], policy: str, metric: str, column: str = "median") -> str:
-    found = next((r for r in records if r["policy"] == policy and r["metric"] == metric), None)
-    return f"{float(found[column]):.6g}" if found and found[column] else "N/A"
+def pick(records: list[dict[str, str]], column: str, **where: str) -> float | None:
+    found = next((r for r in records if all(r.get(k) == v for k, v in where.items())), None)
+    try:
+        return float(found[column]) if found and found.get(column) not in (None, "") else None
+    except ValueError:
+        return None
 
 
 def main() -> None:
-    timing = rows(ROOT / "paper_results" / "physical" / "timing_summary.csv")
-    radio = rows(ROOT / "paper_results" / "physical" / "radio_summary.csv")
+    timing, radio = rows(PHYSICAL / "timing_summary.csv"), rows(PHYSICAL / "radio_summary.csv")
+    counts = rows(PHYSICAL / "session_counts.csv")
+    map_summary, map_stats = rows(PHYSICAL / "map_alignment_summary.csv"), rows(PHYSICAL / "map_alignment_statistics.csv")
+    fifo_plus = {"reference": "FIFO", "candidate": "BACS+"}
+
+    def ratio() -> float | None:
+        deferral = pick(timing, "median", policy="BACS+", metric="deferral_sent_s")
+        channel = pick(timing, "median", policy="BACS+", metric="channel_delay_s")
+        return deferral / channel if deferral and channel else None
+
+    def neg(value: float | None) -> float | None:
+        return -value if value is not None else None
+
+    recomputed: dict[str, tuple[Callable[[], float | None], str]] = {
+        "map_rmse_fifo": (lambda: pick(map_summary, "mean_m", policy="FIFO"), "map_alignment_summary.csv"),
+        "map_rmse_bacs": (lambda: pick(map_summary, "mean_m", policy="BACS"), "map_alignment_summary.csv"),
+        "map_rmse_bacsplus": (lambda: pick(map_summary, "mean_m", policy="BACS+"), "map_alignment_summary.csv"),
+        "map_improvement": (lambda: neg(pick(map_stats, "relative_change_of_means", **fifo_plus)), "map_alignment_statistics.csv"),
+        "map_wilcoxon_p": (lambda: pick(map_stats, "wilcoxon_paired_p_one_sided_less", **fifo_plus), "map_alignment_statistics.csv"),
+        "map_cliffs_delta": (lambda: pick(map_stats, "cliffs_delta", **fifo_plus), "map_alignment_statistics.csv"),
+        "age_fifo": (lambda: pick(timing, "median", policy="FIFO", metric="packet_age_s"), "timing_summary.csv"),
+        "deferral_fifo": (lambda: pick(timing, "median", policy="FIFO", metric="deferral_sent_s"), "timing_summary.csv"),
+        "channel_fifo": (lambda: pick(timing, "median", policy="FIFO", metric="channel_delay_s"), "timing_summary.csv"),
+        "age_bacsplus": (lambda: pick(timing, "median", policy="BACS+", metric="packet_age_s"), "timing_summary.csv"),
+        "deferral_bacsplus": (lambda: pick(timing, "median", policy="BACS+", metric="deferral_sent_s"), "timing_summary.csv"),
+        "channel_bacsplus": (lambda: pick(timing, "median", policy="BACS+", metric="channel_delay_s"), "timing_summary.csv"),
+        "deferral_channel_ratio": (ratio, "timing_summary.csv"),
+        "generated_per_session": (lambda: pick(counts, "packets_generated_per_session", policy="BACS+"), "session_counts.csv"),
+        "sent_per_run": (lambda: pick(counts, "packets_sent_per_run_median", policy="BACS+"), "session_counts.csv"),
+        "airtime_bacsplus": (lambda: pick(radio, "median", policy="BACS+", metric="airtime_fraction_of_duty_budget"), "radio_summary.csv"),
+    }
+
+    lines = []
+    for claim in rows(ROOT / "paper_results" / "paper_claims.csv"):
+        compute, source = recomputed[claim["claim_id"]]
+        paper, value = float(claim["paper_value"]), compute()
+        if value is None or math.isnan(value):
+            status, shown, diff = "NOT_COMPUTABLE", "N/A", "N/A"
+        else:
+            rel = abs(value - paper) / abs(paper)
+            status, shown, diff = ("MATCH" if rel <= TOLERANCE else "MISMATCH"), f"{value:.4g}", f"{rel:.1%}"
+        lines.append(f"| {claim['description']} | {claim['paper_value']} {claim['unit']} | {shown} | {diff} | "
+                     f"{status} | `{source}` | {claim['manuscript_location']} |")
+
+    mismatches = sum("| MISMATCH |" in line for line in lines)
     report = f"""# Reproducibility report
 
-All recomputed values below are rendered from generated CSVs by `scripts/update_report.py`; no paper result constants are embedded in analysis code. The supplied evidence validates physical N=2 only.
+Generated by `scripts/update_report.py` from the CSVs in `paper_results/physical/`. Draft-manuscript values are read from `paper_results/paper_claims.csv` and are compared only; nothing is fitted to them. MATCH means within {TOLERANCE:.0%} relative difference. Metric definitions: `docs/METRIC_DEFINITIONS.md`. Open data-quality questions: `REPRODUCIBILITY_ISSUES.md`.
 
-| Metric | Paper value | Recomputed value | Difference | Status | Source data | Analysis script |
+| Claim | Draft paper | Recomputed | Rel. diff. | Status | Source | Manuscript |
 |---|---:|---:|---:|---|---|---|
-| FIFO map-alignment RMSE | Not encoded | N/A | N/A | NOT_COMPUTABLE | No fused map or estimated trajectory supplied | `scripts/reproduce_physical.py` |
-| BACS map-alignment RMSE | Not encoded | N/A | N/A | NOT_COMPUTABLE | No fused map or estimated trajectory supplied | `scripts/reproduce_physical.py` |
-| BACS+ map-alignment RMSE | Not encoded | N/A | N/A | NOT_COMPUTABLE | No fused map or estimated trajectory supplied | `scripts/reproduce_physical.py` |
-| BACS+ improvement versus FIFO | Not encoded | N/A | N/A | NOT_COMPUTABLE | Map RMSE unavailable | `scripts/reproduce_statistics.py` |
-| Map-RMSE Wilcoxon and Cliff's delta | Not encoded | N/A | N/A | NOT_COMPUTABLE | Map RMSE unavailable | `scripts/reproduce_statistics.py` |
-| BACS+ median scheduling deferral (s) | N/A | {value(timing, "BACS+", "deferral_s")} | N/A | COMPUTED | Scheduler log | `scripts/reproduce_physical.py` |
-| BACS+ median channel delay (s) | N/A | N/A | N/A | NOT_COMPUTABLE | `t_tx_ns`/`t_rx_ns` are not recorded | `scripts/reproduce_physical.py` |
-| Deferral/channel ratio | N/A | N/A | N/A | NOT_COMPUTABLE | Channel delay not recorded | `scripts/reproduce_physical.py` |
-| BACS+ median RSSI (dBm) | N/A | {value(radio, "BACS+", "rssi_dbm_mean")} | N/A | COMPUTED | Scheduler log | `scripts/reproduce_physical.py` |
-| BACS+ median SNR (dB) | N/A | {value(radio, "BACS+", "snr_db_mean")} | N/A | COMPUTED | Scheduler log | `scripts/reproduce_physical.py` |
-| BACS+ median airtime utilisation | N/A | {value(radio, "BACS+", "airtime_utilisation")} | N/A | COMPUTED | Scheduler log and configured LoRa parameters | `scripts/reproduce_physical.py` |
+{chr(10).join(lines)}
 
-Generated/transmitted constraints are in `paper_results/physical/timing_per_run.csv`; full timing and radio distributions are in their corresponding summary files. DB3/MCAP message counts match, while stream hashes and timestamps differ; every comparison is retained in `hardware/validation/db3_mcap_equivalence.csv`.
+{mismatches} claim(s) do not match the data. The manuscript must be updated to the recomputed values (or the discrepancy explained) before submission.
+
+Map-alignment rows stay NOT_COMPUTABLE until `paper_results/physical/fused/fused_<session>.csv` exist for every session (see `docs/REPRODUCTION_GUIDE.md`, steps 2-4).
 """
     (ROOT / "REPRODUCIBILITY_REPORT.md").write_text(report, encoding="utf-8")
 

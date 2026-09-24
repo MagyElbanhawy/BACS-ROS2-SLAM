@@ -1,0 +1,17 @@
+claim_id,description,paper_value,unit,manuscript_location
+map_rmse_fifo,FIFO map-alignment RMSE (mean),0.48,m,Sec. 7.3 / Abstract
+map_rmse_bacs,BACS map-alignment RMSE (mean),0.28,m,Sec. 7.3
+map_rmse_bacsplus,BACS+ map-alignment RMSE (mean),0.27,m,Sec. 7.3 / Abstract
+map_improvement,BACS+ vs FIFO relative reduction of mean RMSE,0.438,fraction,Sec. 7.3 / Abstract
+map_wilcoxon_p,BACS+ vs FIFO one-sided paired Wilcoxon p,0.000977,p,Sec. 7.3 / Abstract
+map_cliffs_delta,BACS+ vs FIFO Cliff's delta,-0.81,delta,Sec. 7.3 / Abstract
+age_fifo,FIFO median packet age (sent packets),162,s,Sec. 7.4
+deferral_fifo,FIFO median scheduling deferral (sent packets),161,s,Sec. 7.4
+channel_fifo,FIFO median channel delay,0.18,s,Sec. 7.4
+age_bacsplus,BACS+ median packet age (sent packets),155,s,Sec. 7.4
+deferral_bacsplus,BACS+ median scheduling deferral (sent packets),154,s,Sec. 7.4 / Abstract
+channel_bacsplus,BACS+ median channel delay,0.17,s,Sec. 7.4 / Abstract
+deferral_channel_ratio,BACS+ deferral/channel ratio,906,ratio,Sec. 7.4 / Abstract
+generated_per_session,Candidates generated per session (BACS+),2100,packets,Sec. 7.4
+sent_per_run,Packets transmitted per run (BACS+ median),14,packets,Sec. 7.4
+airtime_bacsplus,BACS+ airtime utilisation,0.975,fraction,Sec. 7.4
