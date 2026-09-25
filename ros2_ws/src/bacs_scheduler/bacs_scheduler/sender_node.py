@@ -42,10 +42,10 @@ class SenderNode(Node):
                         int(p("network_id", 18)), int(p("bw_code", 7)), int(p("preamble", 8)), int(p("power_dbm", 14)))
 
         scheduler = Scheduler(policy, DutyCycleBudget(float(p("window_s", 60.0)), float(p("duty_cycle", 0.01))),
-                              trust_threshold=float(p("trust_threshold", 0.5)),
+                              trust_threshold=float(p("trust_threshold", 0.05)),
                               observability_weight=float(p("observability_weight", 0.30)),
                               observability_reference=int(p("observability_reference", 6)),
-                              defer_half_life_s=float(p("defer_half_life_s", 60.0)))
+                              defer_half_life_s=float(p("defer_half_life_s", 155.0)))
         self.candidate_log = (self.out / f"candidates_{robot}.csv").open("w", newline="", encoding="utf-8")
         self.core = SenderCore(session=session, run=run, policy=policy, robot=robot,
                                robots=list(p("robots", ["limo01", "limo02"])), radio=self.link,
