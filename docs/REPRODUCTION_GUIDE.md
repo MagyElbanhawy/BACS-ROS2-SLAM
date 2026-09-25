@@ -10,6 +10,10 @@
 
 Results marked `NOT_COMPUTABLE` are evidence limitations, not imputed values. Metric definitions are in `docs/METRIC_DEFINITIONS.md`.
 
+The implemented follow-up hardware rerun configuration is documented in
+`config/hardware_experiment_profiles.yaml` and `docs/HARDWARE_EXPERIMENT_V2.md`. It is a plan
+for future sessions, not a claimed result in this repository.
+
 ## B. Fused poses and map-alignment RMSE (ROS 2 Humble)
 
 Map-alignment RMSE needs the fused-map pose of each robot, which the bags don't contain. You produce it by replaying each bag through the same SLAM/fusion stack while `scripts/repro/log_fused_poses.py` records `map -> <robot>/base_link` next to Vicon at 10 Hz.
@@ -78,3 +82,17 @@ python3 scripts/update_report.py
 Once the fused CSVs exist, `scripts/reproduce_physical.py` also runs this step automatically.
 
 The outputs are `map_alignment_per_run.csv`, `map_alignment_summary.csv` (mean ± SD, t-based 95% CI, median and IQR per policy) and `map_alignment_statistics.csv` (paired Wilcoxon, Mann–Whitney and Cliff's δ for each policy pair). `REPRODUCIBILITY_REPORT.md` marks each draft-paper claim MATCH or MISMATCH. Wherever it says MISMATCH, update the manuscript to the recomputed value.
+
+## C. Public dataset replay (Python only)
+
+Use `docs/PUBLIC_DATASET_REPLAY.md` for the dataset layout and provenance notes. The replay is
+offline-only: the repository does not download or commit the public dataset for you.
+
+```bash
+python3 scripts/repro/replay_public_dataset.py /path/to/MRCLAM_Dataset1 \
+  --out paper_results/public_dataset
+```
+
+This writes deterministic CSV/JSON outputs for FIFO, BACS and BACS+ under
+`paper_results/public_dataset/`. Those outputs are separate from the physical evidence and must
+be labelled as public-dataset replay results.
