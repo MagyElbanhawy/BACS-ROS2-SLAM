@@ -116,14 +116,15 @@ def load_mrclam_candidates(root: Path, *, robot_ids: tuple[int, int] = (1, 2),
             trust = max(0.01, math.exp(-float(row.range_m) / 6.0) * math.exp(-abs(float(row.bearing_rad)) / 1.5))
             info = 1.0 / (1.0 + float(row.range_m) + 0.5 * abs(float(row.bearing_rad)))
             payload = _candidate_payload(seq=seq, robot_i=robot_i, robot_j=robot_j, time_s=float(row.time_s),
-                                         dx=dx_meas, dy=dy_meas, dtheta=dtheta_true,
+                                         dx=dx_meas, dy=dy_meas, dtheta=0.0,
                                          predicted_trust=trust, information_score=info,
                                          pair_constraints=pair_counts[pair_key])
             pair_counts[pair_key] += 1
             out.append(DatasetCandidate(dataset="MRCLAM", session=session, robot_i=robot_i, robot_j=robot_j,
                                         payload=payload,
                                         translation_error_m=math.hypot(dx_meas - dx_true, dy_meas - dy_true),
-                                        yaw_error_rad=abs(dtheta_true)))
+                                        yaw_error_rad=abs(math.atan2(math.sin(payload["dtheta"] - dtheta_true),
+                                                                     math.cos(payload["dtheta"] - dtheta_true)))))
             seq += 1
     if not out:
         raise MrclamDatasetError(

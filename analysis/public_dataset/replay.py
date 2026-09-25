@@ -148,6 +148,8 @@ def replay_dataset(candidates: list[DatasetCandidate], out_dir: Path, config: Re
         (out_dir / f"{config.dataset_name.lower()}_{policy.lower()}_summary.json").write_text(
             json.dumps(asdict(result), indent=2), encoding="utf-8"
         )
+    if not summary:
+        raise RuntimeError("Dataset replay produced no policy summaries.")
     with (out_dir / f"{config.dataset_name.lower()}_selected_candidates.csv").open("w", newline="", encoding="utf-8") as handle:
         if all_rows:
             writer = csv.DictWriter(handle, fieldnames=list(all_rows[0].keys()))

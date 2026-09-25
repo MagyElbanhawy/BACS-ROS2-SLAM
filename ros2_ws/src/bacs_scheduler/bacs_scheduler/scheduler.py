@@ -117,7 +117,7 @@ class Scheduler:
         """Return admissible candidates plus the transmitter-side predictions used."""
         now_s = now_ns / 1e9
         items = list(candidates)
-        provisional_queue_s = max(self.budget.capacity_s - self.budget.used_s(now_s), 0.0) * 0.5
+        provisional_queue_s = 0.0
         predictions: dict[int, dict[str, float]] = {}
         for item in items:
             pass1_delay = self.predicted_delay_s(item.payload_bytes, provisional_queue_s, now_s)
