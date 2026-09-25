@@ -123,8 +123,8 @@ def load_mrclam_candidates(root: Path, *, robot_ids: tuple[int, int] = (1, 2),
             out.append(DatasetCandidate(dataset="MRCLAM", session=session, robot_i=robot_i, robot_j=robot_j,
                                         payload=payload,
                                         translation_error_m=math.hypot(dx_meas - dx_true, dy_meas - dy_true),
-                                        yaw_error_rad=abs(math.atan2(math.sin(payload["dtheta"] - dtheta_true),
-                                                                     math.cos(payload["dtheta"] - dtheta_true)))))
+                                        yaw_error_rad=math.atan2(math.sin(payload["dtheta"] - dtheta_true),
+                                                                 math.cos(payload["dtheta"] - dtheta_true))))
             seq += 1
     if not out:
         raise MrclamDatasetError(

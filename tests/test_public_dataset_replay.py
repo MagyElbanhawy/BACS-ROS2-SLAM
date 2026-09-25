@@ -51,3 +51,8 @@ def test_replay_requires_at_least_one_policy(mrclam_fixture: Path, tmp_path: Pat
     candidates = load_mrclam_candidates(mrclam_fixture)
     with pytest.raises(ValueError, match="at least one policy"):
         replay_dataset(candidates, tmp_path / "out", ReplayConfig(policies=()))
+
+
+def test_replay_requires_at_least_one_candidate(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="at least one candidate"):
+        replay_dataset([], tmp_path / "out", ReplayConfig())
