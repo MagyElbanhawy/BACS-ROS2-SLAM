@@ -1,0 +1,1 @@
+wall time 1435.9 s with 8 workers, 600 runs (plus the 25-run frozen check)

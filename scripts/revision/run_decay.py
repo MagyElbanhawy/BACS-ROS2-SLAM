@@ -18,7 +18,7 @@ from __future__ import annotations
 import argparse
 import sys
 import time
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 import numpy as np
@@ -133,11 +133,51 @@ def main() -> int:
         raw = pd.read_csv(OUT / "raw.csv")
     else:
         cells = [(s, n) for n in COUNTS for s in SEEDS]
+        recs = []
+
         with ProcessPoolExecutor(args.workers) as pool:
-            recs = [r for chunk in pool.map(cell, cells) for r in chunk]
-        raw = pd.DataFrame(recs)[["n_robots", "seed", "rule", "pose_rmse", "align_rmse", "gamma", "n_delivered",
-                                  "trust_yield", "airtime_util", "dt_bias"]]
-        raw.to_csv(OUT / "raw.csv", index=False, lineterminator="\n")
+            futures = {pool.submit(cell, c): c for c in cells}
+
+            for i, future in enumerate(as_completed(futures), 1):
+                c = futures[future]
+                chunk = future.result()
+                recs.extend(chunk)
+
+                raw_checkpoint = pd.DataFrame(recs)[
+                    ["n_robots", "seed", "rule", "pose_rmse",
+                     "align_rmse", "gamma", "n_delivered",
+                     "trust_yield", "airtime_util", "dt_bias"]
+                ]
+
+                raw_checkpoint.to_csv(
+                    OUT / "raw_partial.csv",
+                    index=False,
+                    lineterminator="\n",
+                )
+
+                elapsed = time.time() - t0
+                avg = elapsed / i
+                remaining = avg * (len(cells) - i)
+
+                print(
+                    f"[{i}/{len(cells)}] "
+                    f"seed={c[0]} N={c[1]} | "
+                    f"{100*i/len(cells):.1f}% | "
+                    f"ETA {remaining/60:.1f} min",
+                    flush=True,
+                )
+
+        raw = pd.DataFrame(recs)[
+            ["n_robots", "seed", "rule", "pose_rmse",
+             "align_rmse", "gamma", "n_delivered",
+             "trust_yield", "airtime_util", "dt_bias"]
+        ]
+
+        raw.to_csv(
+            OUT / "raw.csv",
+            index=False,
+            lineterminator="\n",
+        )
         (OUT / "runtime.txt").write_text(f"wall time {time.time() - t0:.1f} s with {args.workers} workers, "
                                          f"{len(raw)} runs (plus the 25-run frozen check)\n", encoding="utf-8")
     summary = summarise(raw)
