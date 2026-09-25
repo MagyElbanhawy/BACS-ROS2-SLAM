@@ -118,7 +118,6 @@ class Scheduler:
         now_s = now_ns / 1e9
         items = list(candidates)
         provisional_queue_s = max(self.budget.capacity_s - self.budget.used_s(now_s), 0.0) * 0.5
-        admitted = []
         predictions: dict[int, dict[str, float]] = {}
         for item in items:
             pass1_delay = self.predicted_delay_s(item.payload_bytes, provisional_queue_s, now_s)
@@ -129,10 +128,8 @@ class Scheduler:
                 "information_density": self.information_density(item),
                 "effective_information_score": self.effective_information_score(item),
             }
-            if pass1_trust >= self.trust_threshold:
-                admitted.append(item)
-        ordered = sorted(admitted, key=lambda c: c.sequence) if self.policy == "FIFO" else sorted(
-            admitted, key=lambda c: (-self.information_density(c), c.sequence)
+        ordered = sorted(items, key=lambda c: c.sequence) if self.policy == "FIFO" else sorted(
+            items, key=lambda c: (-self.information_density(c), c.sequence)
         )
         ranked: list[Constraint] = []
         queue_airtime_s = 0.0

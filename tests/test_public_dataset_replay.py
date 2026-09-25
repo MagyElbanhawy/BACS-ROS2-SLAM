@@ -44,3 +44,9 @@ def test_mrclam_adapter_reports_missing_files_clearly(tmp_path: Path) -> None:
     root.mkdir()
     with pytest.raises(FileNotFoundError, match="Barcodes.dat"):
         load_mrclam_candidates(root)
+
+
+def test_replay_requires_at_least_one_policy(mrclam_fixture: Path, tmp_path: Path) -> None:
+    candidates = load_mrclam_candidates(mrclam_fixture)
+    with pytest.raises(ValueError, match="at least one policy"):
+        replay_dataset(candidates, tmp_path / "out", ReplayConfig(policies=()))

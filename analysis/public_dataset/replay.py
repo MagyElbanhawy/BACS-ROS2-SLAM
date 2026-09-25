@@ -136,6 +136,8 @@ def _run_policy(policy: str, candidates: list[DatasetCandidate], config: ReplayC
 
 
 def replay_dataset(candidates: list[DatasetCandidate], out_dir: Path, config: ReplayConfig = ReplayConfig()) -> list[ReplayResult]:
+    if not config.policies:
+        raise ValueError("ReplayConfig.policies must contain at least one policy.")
     out_dir.mkdir(parents=True, exist_ok=True)
     summary: list[ReplayResult] = []
     all_rows: list[dict[str, object]] = []
