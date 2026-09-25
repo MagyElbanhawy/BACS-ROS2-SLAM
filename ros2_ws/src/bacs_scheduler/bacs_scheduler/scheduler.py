@@ -142,6 +142,8 @@ class Scheduler:
             if trust >= self.trust_threshold:
                 ranked.append(item)
                 queue_airtime_s += lora_airtime_s(item.payload_bytes)
+        if self.policy != "FIFO":
+            ranked = sorted(ranked, key=lambda c: (-self.information_density(c), c.sequence))
         return ranked, predictions
 
     def rank(self, candidates: Iterable[Constraint], now_ns: int) -> list[Constraint]:
