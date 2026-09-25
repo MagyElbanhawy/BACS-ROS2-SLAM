@@ -103,6 +103,7 @@ class SchedulerConfig:
     unlimited_budget: bool = False
     trust_gate: float = 0.0     # if >0, theta_hat acts as a filter, not a rank key
     use_observability: bool = False  # add the BACS+ observability term to I_hat
+    rel_gate: float = 0.5       # plus_tw_sub_relgate: gate at rel_gate * window median theta_hat
 
 
 @dataclass

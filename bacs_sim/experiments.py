@@ -468,6 +468,20 @@ S8_ARMS = {
     "info_only":   ("info_only", {}),
     "bacs_gated":  ("bacs_gated", {}),
     "plus_0.30_6": ("bacs_plus", dict(w_obs=0.30, obs_ref=6.0)),
+    # Ranking v2 (paper_results/revision/ranking_v2): trust-weighted gain,
+    # optionally with the observability term and in-window diminishing returns.
+    "bacs_tw":     ("bacs_tw", {}),
+    "plus_tw":     ("plus_tw", dict(w_obs=0.30, obs_ref=6.0)),
+    "plus_tw_sub": ("plus_tw_sub", dict(w_obs=0.30, obs_ref=6.0)),
+    "plus_tw_sub_relgate_0.25": ("plus_tw_sub_relgate", dict(w_obs=0.30, obs_ref=6.0)),
+    "plus_tw_sub_relgate_0.5":  ("plus_tw_sub_relgate", dict(w_obs=0.30, obs_ref=6.0)),
+    "plus_tw_arr":     ("plus_tw_arr", dict(w_obs=0.30, obs_ref=6.0)),
+    "plus_tw_arr_sub": ("plus_tw_arr_sub", dict(w_obs=0.30, obs_ref=6.0)),
+}
+# SchedulerConfig overrides for arms that need them.
+S8_SCHED = {
+    "plus_tw_sub_relgate_0.25": dict(rel_gate=0.25),
+    "plus_tw_sub_relgate_0.5":  dict(rel_gate=0.5),
 }
 # The frozen table's fourth arm, plus_0.60_5, is not registered: running
 # bacs_plus with w_obs=0.60, obs_ref=5 does not reproduce its frozen values
@@ -485,6 +499,8 @@ def s8_config(arm, seed, n_robots, session_s=480.0):
     c.scheduler.policy = policy
     for k, v in info.items():
         setattr(c.infogain, k, v)
+    for k, v in S8_SCHED.get(arm, {}).items():
+        setattr(c.scheduler, k, v)
     # Use the corrected (deferral-derived) decay coefficient on every arm so
     # the comparison is not confounded by an uncalibrated gamma.
     c.trust.gamma_rule = "deferral_derived"
