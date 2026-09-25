@@ -37,6 +37,7 @@ def test_mrclam_adapter_and_replay_outputs_are_deterministic(mrclam_fixture: Pat
     rows = list(csv.DictReader((out / "mrclam_selected_candidates.csv").open(encoding="utf-8")))
     assert {row["policy"] for row in rows} == {"FIFO", "BACS", "BACS+"}
     assert all(float(row["translation_error_m"] or 0.0) >= 0.0 for row in rows)
+    assert all(float(row["yaw_error_rad"] or 0.0) >= 0.0 for row in rows)
 
 
 def test_mrclam_adapter_reports_missing_files_clearly(tmp_path: Path) -> None:
