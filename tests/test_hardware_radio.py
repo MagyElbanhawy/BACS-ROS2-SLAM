@@ -139,6 +139,21 @@ def test_bacs_plus_prefers_informative_and_drops_old() -> None:
     assert {r["seq"]: r["status"] for r in rows(log)}["1"] == "PENDING_AT_END"
 
 
+def test_queue_predictions_reflect_ranked_backlog() -> None:
+    clock, log = Clock(), io.StringIO()
+    core = make_core("BACS", clock, FakeRadio(clock), log)
+    core.enqueue(candidate(1, clock.t, trust=0.9, info=0.9))
+    core.enqueue(candidate(2, clock.t, trust=0.9, info=0.6))
+    core.enqueue(candidate(3, clock.t, trust=0.9, info=0.3))
+    assert core.tick() == SENT
+    core.close()
+    by_seq = {int(r["seq"]): r for r in rows(log)}
+    assert float(by_seq[2]["predicted_delay_s"]) > float(by_seq[1]["predicted_delay_s"])
+    assert float(by_seq[3]["predicted_delay_s"]) > float(by_seq[2]["predicted_delay_s"])
+    assert float(by_seq[2]["predicted_trust_tx"]) < float(by_seq[1]["predicted_trust_tx"])
+    assert float(by_seq[3]["predicted_trust_tx"]) < float(by_seq[2]["predicted_trust_tx"])
+
+
 def test_timeout_is_charged_to_budget_but_error_is_not() -> None:
     clock, log = Clock(), io.StringIO()
     core = make_core("FIFO", clock, FakeRadio(clock, ["+ERR=4", "TIMEOUT"]), log)

@@ -3,9 +3,6 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-import sys
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from analysis.public_dataset import ReplayConfig, load_mrclam_candidates, replay_dataset
 

@@ -8,9 +8,12 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from ros2_ws.src.bacs_scheduler.bacs_scheduler.scheduler import DutyCycleBudget, Scheduler
+from ros2_ws.src.bacs_scheduler.bacs_scheduler.sender_core import CANDIDATE_LOG_FIELDS
 from ros2_ws.src.bacs_scheduler.bacs_scheduler.sender_core import SENT, SenderCore
 
 from .mrclam import DatasetCandidate
+
+SELECTED_FIELDS = list(dict.fromkeys(CANDIDATE_LOG_FIELDS + ["policy", "dataset", "session", "translation_error_m"]))
 
 
 class _Clock:
@@ -154,10 +157,9 @@ def replay_dataset(candidates: list[DatasetCandidate], out_dir: Path, config: Re
     if not summary:
         raise RuntimeError("Dataset replay produced no policy summaries.")
     with (out_dir / f"{config.dataset_name.lower()}_selected_candidates.csv").open("w", newline="", encoding="utf-8") as handle:
-        if all_rows:
-            writer = csv.DictWriter(handle, fieldnames=list(all_rows[0].keys()))
-            writer.writeheader()
-            writer.writerows(all_rows)
+        writer = csv.DictWriter(handle, fieldnames=SELECTED_FIELDS)
+        writer.writeheader()
+        writer.writerows(all_rows)
     with (out_dir / f"{config.dataset_name.lower()}_summary.csv").open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=list(asdict(summary[0]).keys()))
         writer.writeheader()

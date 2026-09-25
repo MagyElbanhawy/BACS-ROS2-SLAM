@@ -133,18 +133,19 @@ class Scheduler:
             }
             provisional_queue_s += lora_airtime_s(item.payload_bytes)
         ordered = base_order
-        ranked: list[Constraint] = []
-        queue_airtime_s = 0.0
-        for item in ordered:
-            delay_s = self.predicted_delay_s(item.payload_bytes, queue_airtime_s, now_s)
-            trust = self.predicted_trust(item, delay_s)
-            predictions[item.sequence].update({"predicted_delay_s": delay_s, "predicted_trust_tx": trust})
-            if trust >= self.trust_threshold:
-                ranked.append(item)
-                queue_airtime_s += lora_airtime_s(item.payload_bytes)
-        if self.policy != "FIFO":
-            ranked = sorted(ranked, key=lambda c: (-self.information_density(c), c.sequence))
-        return ranked, predictions
+        while True:
+            ranked: list[Constraint] = []
+            queue_airtime_s = 0.0
+            for item in ordered:
+                delay_s = self.predicted_delay_s(item.payload_bytes, queue_airtime_s, now_s)
+                trust = self.predicted_trust(item, delay_s)
+                predictions[item.sequence].update({"predicted_delay_s": delay_s, "predicted_trust_tx": trust})
+                if trust >= self.trust_threshold:
+                    ranked.append(item)
+                    queue_airtime_s += lora_airtime_s(item.payload_bytes)
+            if self.policy == "FIFO" or [c.sequence for c in ranked] == [c.sequence for c in ordered]:
+                return ranked, predictions
+            ordered = sorted(ranked, key=lambda c: (-self.information_density(c), c.sequence))
 
     def rank(self, candidates: Iterable[Constraint], now_ns: int) -> list[Constraint]:
         """Return admissible candidates in transmission order without touching the budget."""

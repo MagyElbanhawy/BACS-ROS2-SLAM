@@ -75,7 +75,8 @@ class FusionNode(Node):
             self.core.optimize()
 
     def on_tf(self) -> None:
-        stamp = self.get_clock().now().to_msg()
+        now = self.get_clock().now()
+        stamp = now.to_msg()
         transforms = []
         poses = []
         for robot in self.robots:
@@ -93,7 +94,7 @@ class FusionNode(Node):
         if transforms:
             self.broadcaster.sendTransform(transforms)
             self.fused_pub.publish(String(data=json.dumps({
-                "stamp_ns": self.get_clock().now().nanoseconds,
+                "stamp_ns": now.nanoseconds,
                 "map_frame": self.map_frame,
                 "poses": poses,
             }, separators=(",", ":"))))
