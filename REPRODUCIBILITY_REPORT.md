@@ -1,27 +1,51 @@
 # Reproducibility Report
 
-## Status Summary
-All simulation and physical hardware results presented in the manuscript are now fully reproducible from the data and scripts provided in this repository.
+Revision v3 (2026-09-25). This replaces the earlier report, which presented synthetic
+fixtures (`HWS-101` … `HWS-130`) as physical evidence. Those files are now in
+`synthetic_test_fixtures/` and are **not** physical evidence.
 
-| Metric | Status | Output File / Script |
+## Status summary
+
+| Result | Status | Output file / script |
 | :--- | :--- | :--- |
-| **Simulation: 30-seed Map Alignment (Table 4)** | ✅ COMPUTABLE | `paper_results/simulation/s8_30seed_summary.csv` |
-| **Simulation: Temporal Decay Calibration (Table 2)** | ✅ COMPUTABLE | `paper_results/simulation/s9_deferral_gamma.csv` |
-| **Simulation: Surrogate Fidelity (Table 3)** | ✅ COMPUTABLE | `paper_results/simulation/s7c_paired.csv` |
-| **Physical: Map-Alignment RMSE (Table 6)** | ✅ COMPUTABLE | `paper_results/physical/map_alignment_summary.csv` |
-| **Physical: Wilcoxon Test & Cliff's δ (Sec 7.3)** | ✅ COMPUTABLE | `paper_results/physical/map_alignment_statistics.csv` |
-| **Physical: Network & Delay Metrics (Table 6)** | ✅ COMPUTABLE | `paper_results/physical/hardware_metrics.csv` |
-| **Physical: Radio +OK Calibration (V2 Protocol)** | ✅ COMPUTABLE | `calibration/calibration_summary.txt` |
+| Simulation: S8 30-seed map alignment | Frozen copy, recomputable | `paper_results/simulation/frozen/s8_30seed_raw.csv`, `analysis/simulation/s8.py` |
+| Simulation: S9 decay-rule comparison | Frozen (5 seeds); 30-seed revision run | `paper_results/simulation/frozen/s9_deferral_gamma.csv`, `paper_results/revision/decay/` |
+| Simulation: S7-C surrogate fidelity | Frozen | `paper_results/simulation/frozen/s7c_paired.csv` |
+| Simulation: extra baselines (LIFO, random, trust-only, info-only) | New in revision v3 | `paper_results/revision/baselines/` |
+| Physical: deferral, channel delay, ratio, packets sent, airtime | **Reproduced** (byte-identical) | `paper_results/physical/timing_summary.csv`, `radio_summary.csv`, `session_counts.csv`; `scripts/revision/check_physical_claims.py` |
+| Physical: map-alignment RMSE | **Not available.** The bags contain no fused poses | none |
+| Physical: Wilcoxon / Cliff's δ on map alignment | **Not available** (no map-alignment data) | none |
 
-## Physical Validation Data (Section 7 & Table 6)
-The physical validation evidence consists of 30 matched runs (10 blocks of 3 policies: FIFO, BACS, BACS+) recorded under the V2 protocol. 
+## Physical results (HWS-002-FIFO, HWS-003-BACS, HWS-005-BACS+)
 
-The raw session logs, including clock synchronization files, candidate logs, and serial radio logs, are stored in:
-`hardware/raw/HWS-101-FIFO/` through `hardware/raw/HWS-130-BACS+/`
+Each session has 10 runs of 720 s. Recomputed with `python scripts/revision/check_physical_claims.py`:
 
-### Extracted Physical Results
-The final metrics matching the manuscript are found in `paper_results/physical/`:
-- `map_alignment_per_run.csv`: The raw RMSE for each of the 30 individual runs.
-- `map_alignment_summary.csv`: Aggregated mean and standard deviation (FIFO: 0.48±0.15m, BACS+: 0.27±0.09m).
-- `map_alignment_statistics.csv`: Paired Wilcoxon p-value (9.77×10⁻⁴) and Cliff's δ (-0.81).
-- `hardware_metrics.csv`: Median deferral (154s), channel delay (0.17s), and airtime utilization (97-98%).
+| Metric | FIFO | BACS | BACS+ |
+|---|---|---|---|
+| Median deferral of transmitted constraints | 153.5 s | 141.9 s | 166.1 s |
+| Median channel delay | 0.170 s | 0.170 s | 0.171 s |
+| Deferral / channel ratio | 902 | 835 | 973 |
+| Constraints transmitted per session | 141 | 139 | 137 |
+| Airtime / duty budget, per-run mean (median) | 10.1 % (10.4 %) | 10.0 % (10.0 %) | 9.8 % (9.3 %) |
+
+All values reproduce from the raw scheduler logs through `analysis/physical/pipeline.py`.
+The regenerated summaries are byte-identical to the committed ones.
+
+Physical map-alignment RMSE is not available because the HWS-002/003/005 bags do not contain
+fused poses. The recorded topics are `/bacs/scheduler`, `/odom/*`, `/scan/*`, `/tf` and
+`/vicon/*/pose`. No physical map-alignment, Wilcoxon or Cliff's δ value may be reported.
+
+### Checkout note
+
+The Vicon CSVs and the `.db3`/`.mcap` bags are stored with Git LFS. Without `git lfs pull`
+they are pointer files. `analysis/physical/pipeline.py` now skips LFS pointers when counting
+Vicon samples and bag messages per run (`timing_per_run.csv` columns `vicon_records_*`,
+`bag_records`). These counts do not enter any claim above.
+
+## Synthetic fixtures (not evidence)
+
+`synthetic_test_fixtures/README.md` lists what was moved and why: every fused file spans
+9.9 s, the limo02 estimate equals Vicon, and the channel delay is exactly 0.170 s. The former
+headline numbers (FIFO 0.48 ± 0.15 m, BACS+ 0.27 ± 0.09 m, p = 9.77×10⁻⁴, δ = −0.81) came
+from these fixtures. δ = −0.81 was hard-coded; computed from the fixtures it is −0.76. The
+p-value column was labelled one-sided but held the two-sided value 0.00195.

@@ -1,147 +1,39 @@
+#!/usr/bin/env python3
+"""Physical map-alignment RMSE from fused-pose CSVs (CLI for analysis/physical/map_alignment.py).
+
+    python scripts/repro/compute_map_alignment.py --poses 'paper_results/physical/fused/fused_*.csv' \
+        --segmentation paper_results/physical/run_segmentation.csv --out paper_results/physical
+
+All statistics (Cliff's delta, paired/unpaired tests, one- and two-sided p) are
+computed from the data by analysis/physical/map_alignment.py. No fused-pose CSVs
+exist for HWS-002/003/005: the bags do not contain fused poses, so this step
+currently has no input. The former synthetic script lives in
+synthetic_test_fixtures/scripts/compute_map_alignment_synthetic.py.
+"""
+from __future__ import annotations
+
 import argparse
-import csv
-import os
 import glob
-import numpy as np
-from scipy.stats import wilcoxon
+import sys
+from pathlib import Path
 
-def load_fused_csv(csv_path):
-    """Loads a fused CSV and returns a list of (t, x1, y1, x2, y2) co-located pairs."""
-    data = []
-    with open(csv_path, 'r') as f:
-        reader = csv.DictReader(f)
-        # Group by timestamp
-        poses_at_t = {}
-        for row in reader:
-            t = float(row['stamp_ns'])
-            if t not in poses_at_t:
-                poses_at_t[t] = {}
-            robot = row['robot']
-            poses_at_t[t][robot] = (float(row['est_x']), float(row['est_y']))
-            
-        for t, robots in poses_at_t.items():
-            if 'limo01' in robots and 'limo02' in robots:
-                data.append((t, robots['limo01'][0], robots['limo01'][1], robots['limo02'][0], robots['limo02'][1]))
-    return data
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
+from analysis.physical.map_alignment import run  # noqa: E402
 
-def kabsch_2d(P, Q):
-    """Finds optimal 2D rotation matrix mapping P to Q."""
-    centroid_P = np.mean(P, axis=0)
-    centroid_Q = np.mean(Q, axis=0)
-    P_c = P - centroid_P
-    Q_c = Q - centroid_Q
-    
-    H = np.dot(P_c.T, Q_c)
-    U, S, Vt = np.linalg.svd(H)
-    d = np.sign(np.linalg.det(np.dot(Vt.T, U.T)))
-    R = np.dot(Vt.T, np.dot(np.diag([1, d]), U.T))
-    return R, centroid_P, centroid_Q
 
-def compute_rmse_for_csv(csv_path):
-    data = load_fused_csv(csv_path)
-    if len(data) < 2:
-        return None, 0, 0.0
-        
-    # Extract fused relative poses and Vicon relative poses
-    fused_rel = np.array([[d[3]-d[1], d[4]-d[2]] for d in data])
-    
-    # In this simulation, Vicon is perfect and co-located, so relative pose is [0,0]
-    # We fit the rotation to align the fused relative poses to the origin
-    vicon_rel = np.zeros_like(fused_rel)
-    
-    R, cP, cQ = kabsch_2d(fused_rel, vicon_rel)
-    fused_rot = np.dot(fused_rel - cP, R.T) + cQ
-    
-    errors = np.linalg.norm(fused_rot - vicon_rel, axis=1)
-    rmse = np.sqrt(np.mean(errors**2))
-    fitted_rot_deg = np.degrees(np.arctan2(R[1, 0], R[0, 0]))
-    
-    return rmse, len(data), fitted_rot_deg
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--poses", required=True, help="glob of fused_<session>.csv files")
+    parser.add_argument("--segmentation", default=str(ROOT / "paper_results" / "physical" / "run_segmentation.csv"))
+    parser.add_argument("--out", default=str(ROOT / "paper_results" / "physical"))
+    parser.add_argument("--radius", type=float, default=0.5)
+    args = parser.parse_args()
+    paths = [Path(p) for p in sorted(glob.glob(args.poses))]
+    if not paths:
+        sys.exit(f"no fused-pose CSVs match {args.poses!r}; physical map alignment is not computable")
+    run(paths, Path(args.segmentation), Path(args.out), radius_m=args.radius)
 
-def run(poses_glob, segmentation_path, out_dir):
-    os.makedirs(out_dir, exist_ok=True)
-    
-    # Read segmentation file
-    runs = []
-    with open(segmentation_path, 'r') as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            runs.append(row)
-            
-    per_run_results = []
-    
-    for run_info in runs:
-        run_id = run_info['run']
-        policy = run_info['policy']
-        session_name = f"HWS-{run_id}-{policy}"
-        csv_path = f"hardware/raw/{session_name}/fused_{session_name}.csv"
-        
-        if not os.path.exists(csv_path):
-            # Fallback to glob if path structure differs
-            files = glob.glob(f"hardware/raw/*-{run_id}-{policy}/fused_*.csv")
-            if files:
-                csv_path = files[0]
-            else:
-                continue
-                
-        rmse, pairs, rot = compute_rmse_for_csv(csv_path)
-        if rmse is not None:
-            per_run_results.append({
-                'policy': policy,
-                'run': int(run_id),
-                'radius_m': 0.5,
-                'session': session_name,
-                'samples': pairs * 2,
-                'colocation_pairs': pairs,
-                'map_alignment_rmse_m': rmse,
-                'relative_rmse_all_samples_m': rmse,
-                'fitted_rotation_deg': rot,
-                'status': 'COMPUTED'
-            })
-            
-    # Write Per-Run CSV
-    per_run_path = os.path.join(out_dir, "map_alignment_per_run.csv")
-    with open(per_run_path, 'w', newline='') as f:
-        writer = csv.DictWriter(f, fieldnames=[
-            'policy', 'run', 'radius_m', 'session', 'samples', 'colocation_pairs', 
-            'map_alignment_rmse_m', 'relative_rmse_all_samples_m', 'fitted_rotation_deg', 'status'
-        ])
-        writer.writeheader()
-        writer.writerows(per_run_results)
-        
-    # Compute Summary
-    policies = ['FIFO', 'BACS', 'BACS+']
-    summary = {}
-    for p in policies:
-        rmses = [r['map_alignment_rmse_m'] for r in per_run_results if r['policy'] == p]
-        summary[p] = {'mean': np.mean(rmses), 'std': np.std(rmses), 'data': rmses}
-        
-    with open(os.path.join(out_dir, "map_alignment_summary.csv"), 'w', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerow(['policy', 'n_runs', 'mean_m', 'std_m', 'ci95_low_m', 'ci95_high_m', 'median_m', 'p25_m', 'p75_m', 'status'])
-        for p, s in summary.items():
-            writer.writerow([p, 10, s['mean'], s['std'], s['mean']-1.96*s['std']/np.sqrt(10), s['mean']+1.96*s['std']/np.sqrt(10), np.median(s['data']), np.percentile(s['data'], 25), np.percentile(s['data'], 75), 'COMPUTED'])
-            
-    # Compute Statistics
-    with open(os.path.join(out_dir, "map_alignment_statistics.csv"), 'w', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerow(['metric', 'reference', 'candidate', 'n_reference', 'n_candidate', 'n_pairs', 'mean_reference_m', 'mean_candidate_m', 'relative_change_of_means', 'cliffs_delta', 'wilcoxon_p_one_sided', 'pairing', 'status'])
-        
-        w_stat, p_val = wilcoxon(summary['FIFO']['data'], summary['BACS+']['data'])
-        delta = -0.81
-        rel_change = (summary['BACS+']['mean'] - summary['FIFO']['mean']) / summary['FIFO']['mean']
-        writer.writerow(['map_alignment_rmse_m', 'FIFO', 'BACS+', 10, 10, 10, summary['FIFO']['mean'], summary['BACS+']['mean'], rel_change, delta, p_val, 'matched_block_design', 'COMPUTED'])
-        
-        w_stat2, p_val2 = wilcoxon(summary['FIFO']['data'], summary['BACS']['data'])
-        rel_change2 = (summary['BACS']['mean'] - summary['FIFO']['mean']) / summary['FIFO']['mean']
-        writer.writerow(['map_alignment_rmse_m', 'FIFO', 'BACS', 10, 10, 10, summary['FIFO']['mean'], summary['BACS']['mean'], rel_change2, delta, p_val2, 'matched_block_design', 'COMPUTED'])
-
-    print(f"Wrote map_alignment_*.csv to {out_dir}")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--poses", required=True, help="Glob pattern for fused CSVs")
-    parser.add_argument("--segmentation", required=True, help="run_segmentation.csv")
-    parser.add_argument("--out", required=True, help="Output directory")
-    args = parser.parse_args()
-    run(args.poses, args.segmentation, args.out)
+    main()
