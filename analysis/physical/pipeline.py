@@ -60,6 +60,12 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def is_lfs_pointer(path: Path) -> bool:
+    """True for an un-fetched Git-LFS pointer (a checkout without ``git lfs pull``)."""
+    with path.open("rb") as handle:
+        return handle.read(40).startswith(b"version https://git-lfs.github.com/spec/")
+
+
 def write_csv(path: Path, fieldnames: list[str], rows: Iterable[dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as handle:
@@ -267,10 +273,12 @@ def physical_analysis(root: Path) -> None:
                 packet_rows.append(selected_row); run_data[(row["policy"], row["run"])].append(selected_row)
     vicon_by_session_robot: dict[tuple[str, str], list[int]] = {}
     for path in (root / "hardware" / "raw").rglob("vicon_*.csv"):
+        if is_lfs_pointer(path):  # counts left blank rather than guessed
+            continue
         robot = "limo01" if "limo01" in path.name else "limo02"
         with path.open(newline="", encoding="utf-8") as handle:
             vicon_by_session_robot[(session_for(path), robot)] = [int(row["timestamp_ns"]) for row in csv.DictReader(handle)]
-    bag_paths = {session_for(path): path for path in (root / "hardware" / "raw").rglob("*.db3")}
+    bag_paths = {session_for(path): path for path in (root / "hardware" / "raw").rglob("*.db3") if not is_lfs_pointer(path)}
     for (policy, run), records in sorted(run_data.items()):
         sent = [row for row in records if row["sent"] == "1"]
         heard = [row for row in sent if row["rssi_dbm"] != ""]  # RSSI/SNR exist only for received packets

@@ -1,20 +1,20 @@
 claim_id,description,paper_value,unit,manuscript_location,check
-map_rmse_fifo,FIFO map-alignment RMSE (mean),0.48,m,Sec. 7.3 / Abstract,approx
-map_rmse_bacs,BACS map-alignment RMSE (mean),0.28,m,Sec. 7.3,approx
-map_rmse_bacsplus,BACS+ map-alignment RMSE (mean),0.27,m,Sec. 7.3 / Abstract,approx
-map_improvement,BACS+ vs FIFO relative reduction of mean RMSE,0.438,fraction,Sec. 7.3 / Abstract,approx
-map_wilcoxon_p,BACS+ vs FIFO one-sided paired Wilcoxon p,0.000977,p,Sec. 7.3 / Abstract,approx
-map_cliffs_delta,BACS+ vs FIFO Cliff's delta,-0.81,delta,Sec. 7.3 / Abstract,approx
-age_fifo,FIFO median packet age (sent packets),162,s,Sec. 7.4,approx
-deferral_fifo,FIFO median scheduling deferral (sent packets),161,s,Sec. 7.4,approx
-channel_fifo,FIFO median channel delay,0.18,s,Sec. 7.4,approx
-age_bacsplus,BACS+ median packet age (sent packets),155,s,Sec. 7.4,approx
-deferral_bacsplus,BACS+ median scheduling deferral (sent packets),154,s,Sec. 7.4 / Abstract,approx
-channel_bacsplus,BACS+ median channel delay,0.17,s,Sec. 7.4 / Abstract,approx
-deferral_channel_ratio,BACS+ deferral/channel ratio,906,ratio,Sec. 7.4 / Abstract,approx
-generated_per_session,Candidates generated per session (BACS+),2100,packets,Sec. 7.4,approx
-sent_per_run,Packets transmitted per run (BACS+ median),14,packets,Sec. 7.4,approx
-airtime_bacsplus,BACS+ airtime utilisation,0.975,fraction,Sec. 7.4,approx
+phys_deferral_fifo,FIFO (HWS-002) median scheduling deferral of transmitted constraints,153.5,s,Sec. 7 (physical),round_1dp
+phys_channel_fifo,FIFO (HWS-002) median channel delay (t_rx - t_tx),0.17,s,Sec. 7 (physical),round_3dp
+phys_ratio_fifo,FIFO (HWS-002) median deferral / median channel delay,902,ratio,Sec. 7 (physical),round_0dp
+phys_sent_fifo,FIFO (HWS-002) constraints transmitted per session (10 runs),141,packets,Sec. 7 (physical),exact
+phys_airtime_fifo,FIFO (HWS-002) airtime as fraction of the 1% duty-cycle budget (per-run mean),0.1,fraction,Sec. 7 (physical),approx_abs_0.01
+phys_deferral_bacs,BACS (HWS-003) median scheduling deferral of transmitted constraints,141.9,s,Sec. 7 (physical),round_1dp
+phys_channel_bacs,BACS (HWS-003) median channel delay (t_rx - t_tx),0.17,s,Sec. 7 (physical),round_3dp
+phys_ratio_bacs,BACS (HWS-003) median deferral / median channel delay,835,ratio,Sec. 7 (physical),round_0dp
+phys_sent_bacs,BACS (HWS-003) constraints transmitted per session (10 runs),139,packets,Sec. 7 (physical),exact
+phys_airtime_bacs,BACS (HWS-003) airtime as fraction of the 1% duty-cycle budget (per-run mean),0.1,fraction,Sec. 7 (physical),approx_abs_0.01
+phys_deferral_bacsplus,BACS+ (HWS-005) median scheduling deferral of transmitted constraints,166.1,s,Sec. 7 (physical),round_1dp
+phys_channel_bacsplus,BACS+ (HWS-005) median channel delay (t_rx - t_tx),0.171,s,Sec. 7 (physical),round_3dp
+phys_ratio_bacsplus,BACS+ (HWS-005) median deferral / median channel delay,973,ratio,Sec. 7 (physical),round_0dp
+phys_sent_bacsplus,BACS+ (HWS-005) constraints transmitted per session (10 runs),137,packets,Sec. 7 (physical),exact
+phys_airtime_bacsplus,BACS+ (HWS-005) airtime as fraction of the 1% duty-cycle budget (per-run mean),0.1,fraction,Sec. 7 (physical),approx_abs_0.01
+phys_map_alignment,Physical map-alignment RMSE: NOT AVAILABLE - HWS-002/003/005 bags contain no fused poses,NA,m,Sec. 7 (physical),not_available
 sim_reduction_min,Sim S8: smallest BACS+ vs FIFO alignment-RMSE reduction (N=2-5),21.3,%,Abstract,approx
 sim_reduction_max,Sim S8: largest BACS+ vs FIFO alignment-RMSE reduction (N=2-5),48.1,%,Abstract,approx
 sim_reduction_n5,Sim S8: BACS+ vs FIFO alignment-RMSE reduction at N=5,28.7,%,Abstract,approx
