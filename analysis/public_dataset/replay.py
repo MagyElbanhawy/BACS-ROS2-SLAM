@@ -56,7 +56,6 @@ class ReplayResult:
     airtime_s: float
     airtime_fraction_of_duty_budget: float
     selected_translation_rmse_m: float | None
-    selected_yaw_rmse_rad: float | None
 
 
 def _rmse(values: list[float]) -> float | None:
@@ -113,13 +112,16 @@ def _run_policy(policy: str, candidates: list[DatasetCandidate], config: ReplayC
             row["dataset"] = config.dataset_name
             row["session"] = candidates[0].session
             row["translation_error_m"] = "" if candidate is None else candidate.translation_error_m
-            row["yaw_error_rad"] = "" if candidate is None else candidate.yaw_error_rad
             rows.append(row)
     sent = [r for r in rows if r["status"] == SENT]
-    duration_s = max((end_ns - start_ns) / 1e9, 1e-9)
+    sender_budget_s = 0.0
+    for robot in config.robots:
+        robot_times = [c.payload["t_gen_ns"] for c in candidates if c.robot_i == robot]
+        if robot_times:
+            active_s = max((max(robot_times) - min(robot_times)) / 1e9, 1.0 / config.tick_hz)
+            sender_budget_s += config.duty_cycle * active_s
     airtime_s = sum(float(r["airtime_s"]) for r in sent)
     errors = [float(r["translation_error_m"]) for r in sent if r["translation_error_m"] != ""]
-    yaws = [float(r["yaw_error_rad"]) for r in sent if r["yaw_error_rad"] != ""]
     result = ReplayResult(
         policy=policy,
         dataset=config.dataset_name,
@@ -128,9 +130,8 @@ def _run_policy(policy: str, candidates: list[DatasetCandidate], config: ReplayC
         selected_candidates=len(sent),
         dropped_candidates=sum(r["status"] != SENT for r in rows),
         airtime_s=airtime_s,
-        airtime_fraction_of_duty_budget=airtime_s / (config.duty_cycle * duration_s * len(config.robots)),
+        airtime_fraction_of_duty_budget=airtime_s / max(sender_budget_s, 1e-9),
         selected_translation_rmse_m=_rmse(errors),
-        selected_yaw_rmse_rad=_rmse(yaws),
     )
     return result, rows
 

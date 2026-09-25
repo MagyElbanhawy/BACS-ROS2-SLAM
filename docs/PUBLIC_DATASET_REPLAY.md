@@ -29,7 +29,6 @@ The exported metrics are deterministic and include:
 - generated and selected candidates
 - airtime and airtime fraction of the duty-cycle budget
 - selected-candidate relative translation RMSE against ground truth
-- selected-candidate relative yaw RMSE against ground truth
 - per-policy JSON summaries plus combined CSV outputs
 
 These are **public-dataset replay results**, not hardware measurements.
