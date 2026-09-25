@@ -50,6 +50,9 @@ def _odometry_information(cfg):
 
 def run(cfg: SimConfig, precomputed=None, collect_graph: bool = False) -> RunResult:
     rng = np.random.default_rng(cfg.seed)
+    # Scheduler-only stream (used by the "random" policy), seeded from the
+    # experiment seed but independent of the world/channel stream.
+    sched_rng = np.random.default_rng([cfg.seed, 0x5C4ED])
     w = cfg.world
     # BACS+ observability term is active for the bacs_plus policy or when
     # explicitly switched on for an ablation.
@@ -142,7 +145,7 @@ def run(cfg: SimConfig, precomputed=None, collect_graph: bool = False) -> RunRes
 
             ts = time.perf_counter()
             chosen = schedule(pending[rid], budget_per_window,
-                              cfg.scheduler, cfg.lora, rng)
+                              cfg.scheduler, cfg.lora, sched_rng)
             sched_time += time.perf_counter() - ts
 
             airtime_avail += budget_per_window
