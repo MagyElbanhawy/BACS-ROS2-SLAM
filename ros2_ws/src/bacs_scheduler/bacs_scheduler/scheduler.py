@@ -117,9 +117,12 @@ class Scheduler:
         """Return admissible candidates plus the transmitter-side predictions used."""
         now_s = now_ns / 1e9
         items = list(candidates)
-        provisional_queue_s = 0.0
         predictions: dict[int, dict[str, float]] = {}
-        for item in items:
+        base_order = sorted(items, key=lambda c: c.sequence) if self.policy == "FIFO" else sorted(
+            items, key=lambda c: (-self.information_density(c), c.sequence)
+        )
+        provisional_queue_s = 0.0
+        for item in base_order:
             pass1_delay = self.predicted_delay_s(item.payload_bytes, provisional_queue_s, now_s)
             pass1_trust = self.predicted_trust(item, pass1_delay)
             predictions[item.sequence] = {
@@ -128,9 +131,8 @@ class Scheduler:
                 "information_density": self.information_density(item),
                 "effective_information_score": self.effective_information_score(item),
             }
-        ordered = sorted(items, key=lambda c: c.sequence) if self.policy == "FIFO" else sorted(
-            items, key=lambda c: (-self.information_density(c), c.sequence)
-        )
+            provisional_queue_s += lora_airtime_s(item.payload_bytes)
+        ordered = base_order
         ranked: list[Constraint] = []
         queue_airtime_s = 0.0
         for item in ordered:
