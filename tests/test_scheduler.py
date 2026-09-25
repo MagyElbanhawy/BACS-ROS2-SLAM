@@ -28,12 +28,17 @@ def test_fifo_preserves_generation_order() -> None:
 
 
 def test_trust_gating() -> None:
-    assert Scheduler("BACS", DutyCycleBudget(), trust_threshold=.5).select([item(1, .49), item(2, .5)], 0) == [item(2, .5)]
+    assert Scheduler("BACS", DutyCycleBudget(), trust_threshold=.05).select([item(1, .049), item(2, .07)], 0) == [item(2, .07)]
 
 
-def test_bacs_ranking_and_observability() -> None:
+def test_bacs_ranks_strictly_by_information_density() -> None:
     bacs = Scheduler("BACS", DutyCycleBudget())
-    assert bacs.select([item(1, info=.1), item(2, info=.9)], 0)[0].sequence == 2
+    assert [c.sequence for c in bacs.rank([item(1, trust=.9, info=.5), item(2, trust=.2, info=.9)], 0)] == [2, 1]
+
+
+def test_bacs_plus_adds_observability_to_information_term() -> None:
+    bacs_plus = Scheduler("BACS+", DutyCycleBudget(), observability_weight=.30)
+    assert bacs_plus.rank([item(1, info=.5, pair_count=0), item(2, info=.7, pair_count=20)], 0)[0].sequence == 1
     assert item(1, pair_count=0).observability(6) == pytest.approx(1)
     assert item(1, pair_count=6).observability(6) == pytest.approx(exp(-1))
 
@@ -41,3 +46,11 @@ def test_bacs_ranking_and_observability() -> None:
 def test_temporal_decay_parameter() -> None:
     scheduler = Scheduler("BACS+", DutyCycleBudget(), defer_half_life_s=10)
     assert scheduler.gamma_defer == pytest.approx(log(2) / 10)
+
+
+def test_two_pass_prediction_updates_queue_delay_and_trust() -> None:
+    scheduler = Scheduler("BACS", DutyCycleBudget(), trust_threshold=.05, defer_half_life_s=1)
+    ordered, predictions = scheduler.rank_with_predictions([item(1, trust=.9, info=.9), item(2, trust=.9, info=.8)], 0)
+    assert [c.sequence for c in ordered] == [1, 2]
+    assert predictions[2]["predicted_delay_s"] > predictions[1]["predicted_delay_s"]
+    assert predictions[2]["predicted_trust_tx"] < predictions[1]["predicted_trust_tx"]

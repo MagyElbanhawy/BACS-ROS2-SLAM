@@ -113,7 +113,7 @@ def test_fifo_order_budget_and_trust_gate() -> None:
     core = make_core("FIFO", clock, radio, log)
     for seq in range(10):
         core.enqueue(candidate(seq, clock.t - (10 - seq) * 1_000_000_000, info=seq / 10))
-    core.enqueue(candidate(99, clock.t, trust=0.1))
+    core.enqueue(candidate(99, clock.t, trust=0.01))
     statuses = []
     for _ in range(10):
         statuses.append(core.tick()); clock.t += 1_000_000_000
@@ -122,6 +122,7 @@ def test_fifo_order_budget_and_trust_gate() -> None:
     sent = [r for r in rows(log) if r["status"] == SENT]
     assert [int(r["seq"]) for r in sent] == [0, 1, 2, 3, 4]
     assert all(int(r["t_selected_ns"]) - int(r["t_gen_ns"]) > 0 for r in sent)
+    assert all(float(r["predicted_delay_s"]) > 0 and float(r["predicted_trust_tx"]) <= float(r["predicted_trust"]) for r in sent)
     assert next(r for r in rows(log) if r["seq"] == "99")["status"] == REJECTED_TRUST
 
 

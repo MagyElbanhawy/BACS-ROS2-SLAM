@@ -20,7 +20,8 @@ from .scheduler import Constraint, DutyCycleBudget, Scheduler, lora_airtime_s
 CANDIDATE_LOG_FIELDS = [
     "session", "run", "policy", "robot", "seq", "robot_i", "robot_j", "kf_i", "kf_j", "t_gen_ns", "t_enqueued_ns",
     "t_selected_ns", "t_cmd_ns", "t_ok_ns", "radio_response", "payload_bytes", "airtime_s",
-    "predicted_trust", "information_score", "pair_constraints", "queue_length", "rank_time_us", "status",
+    "predicted_trust", "predicted_trust_tx", "predicted_delay_s", "information_score", "effective_information_score",
+    "information_density", "pair_constraints", "queue_length", "rank_time_us", "status",
 ]
 # status values
 SENT, RADIO_ERROR, RADIO_TIMEOUT = "SENT", "RADIO_ERROR", "RADIO_TIMEOUT"
@@ -90,8 +91,12 @@ class SenderCore:
             for seq in [s for s, p in self.queue.items() if now - p.constraint.generated_ns > self.max_queue_age_ns]:
                 self._finish(self.queue.pop(seq), DROPPED_AGE)
             started = time.perf_counter_ns()
-            ordered = self.scheduler.rank([p.constraint for p in self.queue.values()], now)
+            ordered, predictions = self.scheduler.rank_with_predictions([p.constraint for p in self.queue.values()], now)
             rank_time_us = (time.perf_counter_ns() - started) / 1000
+            for seq, values in predictions.items():
+                pending = self.queue.get(seq)
+                if pending is not None:
+                    pending.row.update(values)
             if not ordered or not self.scheduler.budget.can_send(now / 1e9, self.airtime_s):
                 return None
             item = self.queue.pop(ordered[0].sequence)
