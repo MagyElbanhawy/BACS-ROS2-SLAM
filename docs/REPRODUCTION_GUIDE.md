@@ -89,7 +89,7 @@ Use `docs/PUBLIC_DATASET_REPLAY.md` for the dataset layout and provenance notes.
 offline-only: the repository does not download or commit the public dataset for you.
 
 ```bash
-python3 scripts/repro/replay_public_dataset.py /path/to/MRCLAM_Dataset1 \
+python3 -m scripts.repro.replay_public_dataset /path/to/MRCLAM_Dataset1 \
   --out paper_results/public_dataset
 ```
 

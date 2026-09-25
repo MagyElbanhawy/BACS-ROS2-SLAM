@@ -43,7 +43,7 @@ python -m pytest -q
 For the offline public-dataset replay path, see `docs/PUBLIC_DATASET_REPLAY.md` and run:
 
 ```sh
-python scripts/repro/replay_public_dataset.py /path/to/MRCLAM_Dataset1 --out paper_results/public_dataset
+python -m scripts.repro.replay_public_dataset /path/to/MRCLAM_Dataset1 --out paper_results/public_dataset
 ```
 
 ## Physical results
