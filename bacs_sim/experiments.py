@@ -456,42 +456,107 @@ def _s7c_rho(extras, w_obs):
 
 
 # ------------------------------------------------------------------------ S8
-def s8_observability(seeds=range(5), counts=(2, 3, 4, 5), session_s=480.0):
-    """Observability ablation across team size.
+# Arm name -> (scheduler policy, InfoGainConfig overrides). The frozen 30-seed
+# table (paper_results/simulation/frozen/s8_30seed_raw.csv) uses fifo,
+# bacs_gated and plus_0.30_6 (BACS+ with w_obs=0.30, obs_ref=6, the defaults);
+# the revision-v3 baselines differ from bacs_gated only in their ranking key.
+S8_ARMS = {
+    "fifo":        ("fifo", {}),
+    "lifo":        ("lifo", {}),
+    "random":      ("random", {}),
+    "trust_only":  ("trust_only", {}),
+    "info_only":   ("info_only", {}),
+    "bacs_gated":  ("bacs_gated", {}),
+    "plus_0.30_6": ("bacs_plus", dict(w_obs=0.30, obs_ref=6.0)),
+}
+# The frozen table's fourth arm, plus_0.60_5, is not registered: running
+# bacs_plus with w_obs=0.60, obs_ref=5 does not reproduce its frozen values
+# (see paper_results/revision/REPORT.md).
+S8_DEFAULT_ARMS = ("fifo", "bacs_gated", "plus_0.30_6")
 
-    Compares FIFO, plain gated BACS, and BACS+. The PRIMARY metric is
-    map-alignment RMSE (`align_rmse`) -- the inter-robot map-fusion consistency
-    the paper is about -- because the 30-seed study (`s8_30seed_raw.csv`,
-    scripts/run_s8_30seed.py) shows per-step pose RMSE is odometry-drift-bound
-    and carries no significant policy effect, whereas alignment separates the
-    policies cleanly. `pose_rmse` is retained as a secondary column.
-    """
+
+def s8_config(arm, seed, n_robots, session_s=480.0):
+    """SimConfig for one S8 arm: deferral-derived gamma on every arm."""
+    policy, info = S8_ARMS[arm]
+    c = SimConfig()
+    c.seed = seed
+    c.world.n_robots = n_robots
+    c.world.session_s = session_s
+    c.scheduler.policy = policy
+    for k, v in info.items():
+        setattr(c.infogain, k, v)
+    # Use the corrected (deferral-derived) decay coefficient on every arm so
+    # the comparison is not confounded by an uncalibrated gamma.
+    c.trust.gamma_rule = "deferral_derived"
+    return c
+
+
+def s8_seed(seed, n_robots, arms=S8_DEFAULT_ARMS, session_s=480.0):
+    """One (seed, N) cell of S8: every arm on the same precomputed world."""
+    base = _mk(seed=seed, n_robots=n_robots)
+    base.world.session_s = session_s
+    pre = precompute(base)
+    recs = []
+    for arm in arms:
+        r = run(s8_config(arm, seed, n_robots, session_s), precomputed=pre)
+        recs.append(dict(n_robots=n_robots, seed=seed, arm=arm,
+                         pose_rmse=r.pose_rmse,      # secondary
+                         align_rmse=r.align_rmse,    # PRIMARY metric
+                         trust_yield=r.trust_yield,
+                         n_delivered=r.n_delivered))
+    return recs
+
+
+def s8_raw(seeds=range(10, 40), counts=(2, 3, 4, 5), arms=S8_DEFAULT_ARMS, session_s=480.0):
+    """Per-seed S8 table in the layout of s8_30seed_raw.csv."""
     recs = []
     for n in counts:
         for s in seeds:
-            base = _mk(seed=s, n_robots=n)
-            base.world.session_s = session_s
-            pre = precompute(base)
-            for p in ("fifo", "bacs_gated", "bacs_plus"):
-                c = SimConfig()
-                c.seed = s
-                c.world.n_robots = n
-                c.world.session_s = session_s
-                c.scheduler.policy = p
-                # Use the corrected (deferral-derived) decay coefficient on every
-                # arm so the observability comparison is not confounded by an
-                # uncalibrated gamma.
-                c.trust.gamma_rule = "deferral_derived"
-                r = run(c, precomputed=pre)
-                recs.append(dict(n_robots=n, policy=p, seed=s,
-                                 align_rmse=r.align_rmse,   # PRIMARY metric
-                                 pose_rmse=r.pose_rmse,     # secondary
-                                 trust_yield=r.trust_yield,
-                                 n_delivered=r.n_delivered))
-    return _agg(recs, ["n_robots", "policy"])
+            recs.extend(s8_seed(s, n, arms, session_s))
+    return pd.DataFrame(recs)
+
+
+def s8_observability(seeds=range(5), counts=(2, 3, 4, 5), session_s=480.0,
+                     arms=("fifo", "bacs_gated", "bacs_plus")):
+    """Observability ablation across team size.
+
+    Compares FIFO, plain gated BACS, and BACS+ (or any S8_ARMS / policy names
+    passed in `arms`). The PRIMARY metric is map-alignment RMSE (`align_rmse`)
+    -- the inter-robot map-fusion consistency the paper is about -- because the
+    30-seed study (`s8_30seed_raw.csv`) shows per-step pose RMSE is
+    odometry-drift-bound and carries no significant policy effect, whereas
+    alignment separates the policies cleanly. `pose_rmse` is retained as a
+    secondary column.
+    """
+    arms = ["plus_0.30_6" if a == "bacs_plus" else a for a in arms]
+    df = s8_raw(seeds, counts, arms, session_s)
+    df["policy"] = df["arm"].map(lambda a: S8_ARMS[a][0])
+    return _agg(df.drop(columns="arm").to_dict("records"), ["n_robots", "policy"])
 
 
 # ------------------------------------------------------------------------ S9
+S9_RULES = [
+    ("fixed 0.003",        dict(gamma_rule="fixed", gamma=0.003)),
+    ("drift derived",      dict(gamma_rule="derived")),
+    ("drift adaptive",     dict(gamma_rule="adaptive")),
+    ("deferral derived",   dict(gamma_rule="deferral_derived")),
+    ("deferral adaptive",  dict(gamma_rule="deferral_adaptive")),
+]
+
+
+def s9_configs(policy="bacs_gated"):
+    """One SimConfig per S9 decay rule, labelled via __dict__["_name"]."""
+    cfgs = []
+    for name, kw in S9_RULES:
+        c = SimConfig()
+        c.scheduler.policy = policy
+        for k, v in kw.items():
+            setattr(c.trust, k, v)
+        c.__dict__["_name"] = name
+        cfgs.append(c)
+    return cfgs
+
+
 def s9_deferral_gamma(seeds=range(5), policy="bacs_gated"):
     """Compare decay-coefficient rules, including the corrected deferral rules.
 
@@ -499,22 +564,8 @@ def s9_deferral_gamma(seeds=range(5), policy="bacs_gated"):
     and its adaptive variant (both falsified in S4), and the two deferral-based
     rules that anchor gamma to the airtime-queueing timescale instead.
     """
-    variants = [
-        ("fixed 0.003",        dict(gamma_rule="fixed", gamma=0.003)),
-        ("drift derived",      dict(gamma_rule="derived")),
-        ("drift adaptive",     dict(gamma_rule="adaptive")),
-        ("deferral derived",   dict(gamma_rule="deferral_derived")),
-        ("deferral adaptive",  dict(gamma_rule="deferral_adaptive")),
-    ]
-    cfgs, names = [], []
-    for name, kw in variants:
-        c = SimConfig()
-        c.scheduler.policy = policy
-        for k, v in kw.items():
-            setattr(c.trust, k, v)
-        c.__dict__["_name"] = name
-        cfgs.append(c)
-        names.append(name)
+    cfgs = s9_configs(policy)
+    names = [name for name, _ in S9_RULES]
     recs = _sweep(cfgs, seeds, label_fn=lambda c: dict(rule=c.__dict__.get("_name")))
     out = _agg(recs, "rule")
     order = {n: i for i, n in enumerate(names)}

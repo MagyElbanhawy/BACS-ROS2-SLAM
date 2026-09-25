@@ -10,13 +10,23 @@ import numpy as np
 from .config import SchedulerConfig
 from .lora import time_on_air
 
-POLICIES = ["send_all", "fifo", "random", "greedy_trust", "greedy_info",
-            "bacs", "bacs_gated", "bacs_plus"]
+POLICIES = ["send_all", "fifo", "lifo", "random", "greedy_trust", "greedy_info",
+            "trust_only", "info_only", "bacs", "bacs_gated", "bacs_plus"]
+
+# Revision-v3 baselines. Each differs from bacs_gated only in its ranking key:
+# same per-window airtime budget, window, expiry (applied by the simulator) and
+# greedy packing via _pack_by_key.
+BASELINES = ["lifo", "random", "trust_only", "info_only"]
 
 
 def _fits(chosen, cand, budget, lora):
     used = sum(time_on_air(c.payload_bytes, lora) for c in chosen)
     return used + time_on_air(cand.payload_bytes, lora) <= budget
+
+
+def _density(c, lora):
+    """Information per second of airtime, the bacs_gated ranking key."""
+    return c.info_hat / max(time_on_air(c.payload_bytes, lora), 1e-9)
 
 
 def _pack_by_key(cands, key, budget, lora, unlimited=False):
@@ -48,10 +58,25 @@ def schedule(cands, budget, cfg: SchedulerConfig, lora, rng: np.random.Generator
         # ordering that maximises the temporal penalty on what gets sent.
         return _pack_by_key(cands, lambda c: -c.t_created, budget, lora)
 
+    if cfg.policy == "lifo":
+        # Newest candidate first: the mirror image of FIFO.
+        return _pack_by_key(cands, lambda c: c.t_created, budget, lora)
+
     if cfg.policy == "random":
-        shuffled = list(cands)
-        rng.shuffle(shuffled)
-        return _pack_by_key(shuffled, lambda c: 0.0, budget, lora)
+        # Uniform random order. The simulator passes a scheduler-only stream
+        # seeded from the experiment seed, so the draws do not perturb the
+        # channel or world randomness shared with the other policies.
+        u = rng.random(len(cands))
+        rank = {id(c): u[i] for i, c in enumerate(cands)}
+        return _pack_by_key(cands, lambda c: rank[id(c)], budget, lora)
+
+    if cfg.policy == "trust_only":
+        # Predicted trust as the ranking key, no information term.
+        return _pack_by_key(cands, lambda c: c.theta_hat, budget, lora)
+
+    if cfg.policy == "info_only":
+        # bacs_gated's information-density ranking with the trust gate removed.
+        return _pack_by_key(cands, lambda c: _density(c, lora), budget, lora)
 
     if cfg.policy == "greedy_trust":
         return _pack_by_key(cands, lambda c: c.theta_hat, budget, lora)
@@ -74,8 +99,7 @@ def schedule(cands, budget, cfg: SchedulerConfig, lora, rng: np.random.Generator
         # simulator when use_observability is enabled for this policy).
         gate = cfg.trust_gate if cfg.trust_gate > 0 else 0.05
         keep = [c for c in cands if c.theta_hat >= gate] or list(cands)
-        return _pack_by_key(keep, lambda c: c.info_hat / max(time_on_air(c.payload_bytes, lora), 1e-9),
-                            budget, lora)
+        return _pack_by_key(keep, lambda c: _density(c, lora), budget, lora)
 
     raise ValueError(f"unknown policy: {cfg.policy}")
 

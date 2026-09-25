@@ -1,3 +1,0 @@
-metric,reference,candidate,n_reference,n_candidate,n_pairs,mean_reference_m,mean_candidate_m,relative_change_of_means,cliffs_delta,wilcoxon_p_one_sided,pairing,status
-map_alignment_rmse_m,FIFO,BACS+,10,10,10,0.48,0.26999999999999996,-0.43750000000000006,-0.81,0.001953125,matched_block_design,COMPUTED
-map_alignment_rmse_m,FIFO,BACS,10,10,10,0.48,0.27999999999999997,-0.4166666666666667,-0.81,0.001953125,matched_block_design,COMPUTED
