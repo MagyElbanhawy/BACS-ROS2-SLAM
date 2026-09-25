@@ -147,7 +147,7 @@ def replay_dataset(candidates: list[DatasetCandidate], out_dir: Path, config: Re
     for policy in config.policies:
         result, rows = _run_policy(policy, candidates, config)
         summary.append(result)
-        all_rows.extend(rows)
+        all_rows.extend(row for row in rows if row["status"] == SENT)
         (out_dir / f"{config.dataset_name.lower()}_{policy.lower()}_summary.json").write_text(
             json.dumps(asdict(result), indent=2), encoding="utf-8"
         )
