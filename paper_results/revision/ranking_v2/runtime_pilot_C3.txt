@@ -1,0 +1,3 @@
+pilot C3: 40 cells, wall 63 s this invocation, 4 workers
+pilot C3: 40 cells, wall 0 s in this invocation (2026-09-26 09:33), 4 workers
+pilot C3: 40 cells, wall 0 s in this invocation (2026-09-26 09:33), 4 workers

@@ -1,0 +1,2 @@
+pilot C2: 40 cells, wall 51 s in this invocation (2026-09-26 09:33), 4 workers
+pilot C2: 40 cells, wall 0 s in this invocation (2026-09-26 09:33), 4 workers
