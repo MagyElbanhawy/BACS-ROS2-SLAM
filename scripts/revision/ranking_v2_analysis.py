@@ -42,6 +42,32 @@ METRICS = ["align_rmse", "pose_rmse", "trust_yield", "n_delivered", "airtime_uti
            "median_age_arrival", "mean_R"]
 
 
+def _ensure_test_raw(cond: str) -> str:
+    """Make sure <cond>/test_raw.csv and the tx log exist.
+
+    `ranking_v2.py test` writes them only after every condition has finished, so a
+    condition whose 120 cells are all cached is assembled here from the cache.
+    Returns a status string for printing."""
+    d = OUT / cond
+    if (d / "test_raw.csv").exists() and (d / f"tx_log_test_{cond}.csv").exists():
+        return "ready (test_raw.csv)"
+    cells = sorted((OUT / "_cells" / "test" / cond).glob("*.pkl"))
+    expected = 30 * len(COUNTS)
+    if len(cells) < expected:
+        return f"not finished ({len(cells)}/{expected} cells cached) - skipped"
+    import pickle
+    rows, txs = [], []
+    for path in cells:
+        r, t = pickle.load(path.open("rb"))
+        rows += r
+        if len(t):
+            txs.append(t)
+    d.mkdir(exist_ok=True)
+    pd.DataFrame(rows).to_csv(d / "test_raw.csv", index=False, lineterminator="\n")
+    pd.concat(txs, ignore_index=True).to_csv(d / f"tx_log_test_{cond}.csv", index=False, lineterminator="\n")
+    return f"ready (assembled from {len(cells)} cached cells)"
+
+
 def chosen_variant() -> str:
     m = re.search(r"Chosen variant: `(\w+)`", (OUT / "decision.md").read_text())
     return m.group(1)
@@ -261,9 +287,15 @@ def main():
     matplotlib.use("Agg")
     chosen = chosen_variant()
     summaries, trend_rows, sections = {}, [], []
+    ready = {c: _ensure_test_raw(c) for c in CONDS}
+    for c, state in ready.items():
+        print(f"{c}: {state}")
+    if not any(v.startswith("ready") for v in ready.values()):
+        sys.exit("No condition has finished its TEST run yet (see the counts above). Run "
+                 "`python3 scripts/revision/ranking_v2.py test C0 C1 C2 C3` to completion first.")
     for c in CONDS:
         d = OUT / c
-        if not (d / "test_raw.csv").exists():
+        if not ready[c].startswith("ready"):
             continue
         raw = pd.read_csv(d / "test_raw.csv")
         tx = pd.read_csv(d / f"tx_log_test_{c}.csv")
@@ -293,6 +325,10 @@ def main():
         fig_ablation(summaries["C0"], OUT / "fig_ablation.png")
     fig_mechanism(summaries, OUT / "fig_mechanism.png")
     fig_stress(trend, chosen, OUT / "fig_stress.png")
+    missing = [c for c in CONDS if c not in summaries]
+    if missing:
+        print(f"NOTE: {', '.join(missing)} not finished; tables, figures and REPORT.md cover "
+              f"{', '.join(summaries)} only. Re-run this script when the TEST run completes.")
 
     cond = json.loads((OUT / "conditions.json").read_text())
     crow = [[c, json.dumps(cond[c]["overrides"]), f"{cond[c]['t_defer']:.1f}", f"{math.log(2) / cond[c]['t_defer']:.5f}"]
