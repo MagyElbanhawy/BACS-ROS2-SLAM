@@ -103,6 +103,17 @@ class SchedulerConfig:
     unlimited_budget: bool = False
     trust_gate: float = 0.0     # if >0, theta_hat acts as a filter, not a rank key
     use_observability: bool = False  # add the BACS+ observability term to I_hat
+    # Residual-gated ranking (policies "rgate" / "plus_rgate"): a candidate whose
+    # raw predicted residual ||z - relative(fused_i, fused_j)|| [m] exceeds
+    # residual_gate is not admitted; survivors are ranked by
+    # I_hat * theta_hat**trust_alpha / T_air  (log I + alpha log theta - log T_air).
+    # residual_gate = inf and trust_alpha = 0 reproduce bacs_gated / bacs_plus.
+    residual_gate: float = float("inf")
+    trust_alpha: float = 0.0
+    # The residual is measured against the fused map, so it is meaningless until the
+    # robot pair's relative transform is constrained: the gate applies only once the
+    # pair has at least this many delivered constraints (bootstrap).
+    gate_min_pair: int = 0
     rel_gate: float = 0.5       # plus_tw_sub_relgate: gate at rel_gate * window median theta_hat
 
 

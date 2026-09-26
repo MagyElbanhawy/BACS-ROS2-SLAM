@@ -71,7 +71,11 @@ def run(cfg: SimConfig, precomputed=None, collect_graph: bool = False,
     # explicitly switched on for an ablation.
     use_obs = (cfg.scheduler.use_observability
                or cfg.scheduler.policy in OBS_POLICIES
-               or cfg.scheduler.policy in TW_POLICIES)
+               or cfg.scheduler.policy in TW_POLICIES
+               or cfg.scheduler.policy == "plus_rgate")
+    # Residual-gate bookkeeping (evaluations = candidate x window): how often the
+    # gate rejects true outliers and true inliers.
+    gate_counts = dict(outlier_eval=0, outlier_rejected=0, inlier_eval=0, inlier_rejected=0)
     tx_log: List[dict] = []
     tx_window: List = []
     iexact_rng = np.random.default_rng([cfg.seed, 0x1E4AC7])
@@ -160,6 +164,12 @@ def run(cfg: SimConfig, precomputed=None, collect_graph: bool = False,
                 pending[rid] = [c for c in pending[rid]
                                 if c.theta_hat >= cfg.trust.floor * 1.5]
 
+            if cfg.scheduler.policy in ("rgate", "plus_rgate"):
+                for c in pending[rid]:
+                    kind = "outlier" if c.is_outlier else "inlier"
+                    gate_counts[kind + "_eval"] += 1
+                    gate_counts[kind + "_rejected"] += (c._res > cfg.scheduler.residual_gate
+                                                        and c._pair_n >= cfg.scheduler.gate_min_pair)
             ts = time.perf_counter()
             ctx = dict(t_now=t0, gamma=gamma, p_loss=gamma_ctl.p_loss, lora=cfg.lora,
                        window_s=cfg.scheduler.window_s, trust=cfg.trust, infogain=cfg.infogain,
@@ -178,7 +188,8 @@ def run(cfg: SimConfig, precomputed=None, collect_graph: bool = False,
                         theta_hat_code=c.theta_hat, theta_now=theta_now(c, ctx),
                         theta_schedule=theta_arrival(c, ctx),
                         I_hat=c.info_hat, I_hat_plus=c._base_ig + cfg.infogain.w_obs * obs_now,
-                        is_outlier=bool(c.is_outlier))
+                        residual_pred=c._res, pair_constraints=c._pair_n,
+                        residual_server=float("nan"), is_outlier=bool(c.is_outlier))
             sched_time += time.perf_counter() - ts
 
             airtime_avail += budget_per_window
@@ -239,6 +250,8 @@ def run(cfg: SimConfig, precomputed=None, collect_graph: bool = False,
             pred = relative(fused[c.rid_from][c.idx_from], fused[c.rid_to][c.idx_to])
             c.theta = server_trust(float(np.linalg.norm((c.z - pred)[:2])),
                                    dt, cfg.trust, gamma_ctl.value)
+            if collect_tx and hasattr(c, "_log"):
+                c._log["residual_server"] = float(np.linalg.norm((c.z - pred)[:2]))
             if collect_diag:
                 e = float(np.linalg.norm((c.z - pred)[:2]))
                 c._diag.update(theta_spatial=max(0.0, 1.0 - (e / cfg.trust.tau_e) ** cfg.trust.p),
@@ -321,6 +334,7 @@ def run(cfg: SimConfig, precomputed=None, collect_graph: bool = False,
         gamma_final=float(gamma_ctl.value),
         dt_pred_bias=float(np.mean(dt_errors)) if dt_errors else float("nan"),
     )
+    res.extras["gate_counts"] = gate_counts
     if collect_tx:
         res.extras["tx_log"] = tx_log
     if collect_diag:
@@ -464,6 +478,8 @@ def _score_batch(cands, queue_of, cfg, gamma, gamma_ctl, truths, cov, degree,
         c._xy = truths[rid].odom[c.idx_from][:2]
         c._queue_ahead = queue_of[id(c)]
         c._base_ig = base_ig
+        c._res = res                     # raw predicted residual [m] (residual gate)
+        c._pair_n = pair_obs.count(c.rid_from, c.rid_to) if pair_obs else 0
         # Surrogate inputs kept for the submodular schedulers, which rescore
         # candidates inside the greedy loop.
         c.xy_from, c.degree_from, c.loop_len = truths[rid].odom[c.idx_from][:2], deg, loop

@@ -42,6 +42,12 @@ BASELINES = ["lifo", "random", "trust_only", "info_only"]
 TW_POLICIES = ["tw_now", "tw_arrival", "tw_arrival_sub"]
 POLICIES += TW_POLICIES
 
+# Residual-gated ranking (Step 1 of the ranking-v3 plan): outlier rejection on the
+# transmitter's raw predicted residual, separated from the ranking, which is
+# information density with an optional mild trust exponent alpha.
+RGATE_POLICIES = ["rgate", "plus_rgate"]
+POLICIES += RGATE_POLICIES
+
 
 def _fits(chosen, cand, budget, lora):
     used = sum(time_on_air(c.payload_bytes, lora) for c in chosen)
@@ -230,6 +236,28 @@ def _pack_submodular_tw(cands, budget, lora, ctx):
     return chosen
 
 
+def residual_gate(cands, cfg: SchedulerConfig):
+    """Admission for rgate / plus_rgate.
+
+    1. Outlier gate: drop candidates whose raw predicted residual c._res exceeds
+       cfg.residual_gate, but only for robot pairs that already have at least
+       cfg.gate_min_pair delivered constraints (c._pair_n); before that the fused
+       frames are not aligned and every residual is large. No fallback: if every
+       candidate fails, nothing is sent.
+    2. The bacs_gated trust gate (theta_hat >= 0.05, falling back to all
+       survivors if none pass), so that residual_gate = inf reproduces bacs_gated.
+    """
+    kept = [c for c in cands if c._res <= cfg.residual_gate or c._pair_n < cfg.gate_min_pair]
+    gate = cfg.trust_gate if cfg.trust_gate > 0 else 0.05
+    return [c for c in kept if c.theta_hat >= gate] or kept
+
+
+def _rgate_key(c, cfg: SchedulerConfig, lora) -> float:
+    """I_hat * theta_hat**alpha / T_air. alpha = 0 gives exactly bacs_gated's key."""
+    d = _density(c, lora)
+    return d if cfg.trust_alpha == 0.0 else d * max(c.theta_hat, 0.0) ** cfg.trust_alpha
+
+
 def schedule(cands, budget, cfg: SchedulerConfig, lora, rng: np.random.Generator,
              ctx=None):
     """
@@ -292,6 +320,9 @@ def schedule(cands, budget, cfg: SchedulerConfig, lora, rng: np.random.Generator
         gate = cfg.trust_gate if cfg.trust_gate > 0 else 0.05
         keep = [c for c in cands if c.theta_hat >= gate] or list(cands)
         return _pack_by_key(keep, lambda c: _density(c, lora), budget, lora)
+
+    if cfg.policy in RGATE_POLICIES:
+        return _pack_by_key(residual_gate(cands, cfg), lambda c: _rgate_key(c, cfg, lora), budget, lora)
 
     if cfg.policy in TW_POLICIES:
         gate = cfg.trust_gate if cfg.trust_gate > 0 else 0.05

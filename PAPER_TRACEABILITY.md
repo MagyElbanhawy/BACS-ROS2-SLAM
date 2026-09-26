@@ -57,6 +57,7 @@ are synthetic. They are now in `synthetic_test_fixtures/`
 | Revision v3: decay rules (S9, 30 seeds) | `bacs_sim` | Seeds 10-39, N=2-5, 720 s | `paper_results/revision/decay/*.csv` | `fig_decay.png` | `python scripts/revision/run_decay.py` |
 | Ranking v2, `*_tw` study (TW, TW-Arrival, relative gate) | `bacs_sim` | DEV 0-9 / TEST 40-69, N=2-5; nominal, iid loss, burst, +30 s delay | `paper_results/revision/ranking_v2/` | — | `python scripts/revision/run_ranking_v2.py` |
 | Ranking v2, C0-C3 study (`tw_now`, `tw_arrival`, `tw_arrival_sub`) | `bacs_sim` | DEV 0-9 / TEST 40-69, N=2-5; C0 nominal, C1 duty 0.5 % (W=120 s), C2 SF9 (W=200 s), C3 20 % loss | `paper_results/revision/ranking_v2_c0c3/` | `fig_ablation/mechanism/stress.png` | `python scripts/revision/ranking_v2.py {pilot,dev,test}` then `ranking_v2_analysis.py` |
+| Residual-gated BACS / BACS+ (BACS-RG, BACS+-RG): DEV calibration | `bacs_sim` (`rgate`, `plus_rgate`) | DEV 0-9, N=2-5, C0-C3; stage A tau_r x k, stage B alpha | `paper_results/revision/rgate/` | — | `python3 scripts/revision/rgate_calibration.py {stageA,stageB}` |
 
 Details, numbers and discrepancies: `paper_results/revision/REPORT.md`.
 
