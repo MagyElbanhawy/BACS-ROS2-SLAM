@@ -1,0 +1,5 @@
+condition,overrides,n_transmitted,deferral_median_s,deferral_mean_s,gamma_if_used,zero_deferral_share,cells_with_zero_tx,cells
+C0,{},1280,72.0,105.37370209999999,0.0065779902076719896,0.38984375,0,40
+C1,"{""lora.duty_cycle"": 0.005, ""scheduler.window_s"": 120.0}",640,0.0,77.79362719999999,0.008910076641341457,0.515625,0,40
+C2,"{""lora.sf"": 9, ""scheduler.window_s"": 200.0}",617,22.0,88.34485004862238,0.007845926278424353,0.4376012965964344,0,40
+C3,"{""channel.loss_rate"": 0.2}",1280,72.0,105.39206115000002,0.006576844337197453,0.38984375,0,40

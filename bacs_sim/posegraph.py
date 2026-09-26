@@ -73,6 +73,28 @@ class PoseGraph:
             d[j] += 1
         return d
 
+    def hessian(self, damping=1e-6):
+        """Gauss-Newton information matrix at the current estimate, assembled
+        exactly as in optimize() (damping, node-0 anchor); no update step."""
+        n = len(self.nodes)
+        X = np.array(self.nodes, float)
+        rows, cols, vals = [], [], []
+        for (i, j, z, om, w) in self.edges:
+            if w <= 0.0:
+                continue
+            _, A, B = error_and_jacobians(X[i], X[j], z)
+            W = w * om
+            for (M, r, c) in ((A.T @ W @ A, i, i), (A.T @ W @ B, i, j),
+                              (B.T @ W @ A, j, i), (B.T @ W @ B, j, j)):
+                rr, cc = np.meshgrid(3 * r + np.arange(3), 3 * c + np.arange(3), indexing="ij")
+                rows.extend(rr.ravel()); cols.extend(cc.ravel()); vals.extend(M.ravel())
+        H = sp.coo_matrix((vals, (rows, cols)), shape=(3 * n, 3 * n)).tocsr()
+        H = H + damping * sp.eye(3 * n, format="csr")
+        H = H.tolil()
+        for k in range(3):
+            H[k, k] += 1e6
+        return H.tocsr(), X
+
     def optimize(self, iterations=12, tol=1e-6, damping=1e-6):
         """Gauss-Newton with the first node fixed as the gauge anchor."""
         n = len(self.nodes)

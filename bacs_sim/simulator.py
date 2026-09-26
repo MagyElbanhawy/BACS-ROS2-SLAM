@@ -16,7 +16,8 @@ from .lora import Channel, time_on_air, airtime_budget
 from .trust import GammaController, predicted_delay, predicted_trust, server_trust
 from .infogain import CoverageMap, surrogate_info
 from .observability import PairObservability
-from .schedulers import OBS_POLICIES, arrival_trust, schedule, compute_utility, trust_weighted_info
+from .schedulers import OBS_POLICIES, arrival_trust, schedule, compute_utility, trust_weighted_info, \
+    TW_POLICIES, theta_now, theta_arrival, predicted_arrival_age, tw_info
 from .posegraph import PoseGraph
 from .agents import make_agent
 
@@ -49,7 +50,18 @@ def _odometry_information(cfg):
 
 
 def run(cfg: SimConfig, precomputed=None, collect_graph: bool = False,
+        collect_tx: bool = False, iexact_fraction: float = 1.0,
         collect_diag: bool = False) -> RunResult:
+    """Run one session.
+
+    collect_diag: stale-information diagnostics of the *_tw ranking-v2 study
+    (res.extras["diag"]).
+
+    collect_tx: log every transmitted constraint in res.extras["tx_log"] (ranking
+    v2 mechanism analysis), including I_exact against the server graph before
+    insertion for a random `iexact_fraction` of them (drawn from a separate
+    stream, so the simulation itself is unaffected).
+    """
     rng = np.random.default_rng(cfg.seed)
     # Scheduler-only stream (used by the "random" policy), seeded from the
     # experiment seed but independent of the world/channel stream.
@@ -58,7 +70,11 @@ def run(cfg: SimConfig, precomputed=None, collect_graph: bool = False,
     # BACS+ observability term is active for the bacs_plus policy or when
     # explicitly switched on for an ablation.
     use_obs = (cfg.scheduler.use_observability
-               or cfg.scheduler.policy in OBS_POLICIES)
+               or cfg.scheduler.policy in OBS_POLICIES
+               or cfg.scheduler.policy in TW_POLICIES)
+    tx_log: List[dict] = []
+    tx_window: List = []
+    iexact_rng = np.random.default_rng([cfg.seed, 0x1E4AC7])
     pair_obs = PairObservability(cfg.infogain.obs_ref)
 
     if precomputed is None:
@@ -145,10 +161,24 @@ def run(cfg: SimConfig, precomputed=None, collect_graph: bool = False,
                                 if c.theta_hat >= cfg.trust.floor * 1.5]
 
             ts = time.perf_counter()
+            ctx = dict(t_now=t0, gamma=gamma, p_loss=gamma_ctl.p_loss, lora=cfg.lora,
+                       window_s=cfg.scheduler.window_s, trust=cfg.trust, infogain=cfg.infogain,
+                       coverage=coverage[rid], pair_obs=pair_obs)
             chosen = schedule(pending[rid], budget_per_window,
-                              cfg.scheduler, cfg.lora, sched_rng,
-                              ctx=dict(coverage=coverage[rid], pair_obs=pair_obs,
-                                       infogain=cfg.infogain, gamma=gamma, t_now=t0))
+                              cfg.scheduler, cfg.lora, sched_rng, ctx=ctx)
+            if collect_tx:
+                for c in chosen:
+                    obs_now = pair_obs.score(c.rid_from, c.rid_to)
+                    c._log = dict(
+                        robot=rid, pair=f"{min(c.rid_from, c.rid_to)}-{max(c.rid_from, c.rid_to)}",
+                        t_gen=c.t_created, t_sched=t0, k_c=c.deferrals,
+                        age_at_schedule=max(t0 - c.t_created, 0.0),
+                        predicted_arrival_age=predicted_arrival_age(c, ctx),
+                        dt_hat_code=c.dt_hat, T_air=time_on_air(c.payload_bytes, cfg.lora),
+                        theta_hat_code=c.theta_hat, theta_now=theta_now(c, ctx),
+                        theta_schedule=theta_arrival(c, ctx),
+                        I_hat=c.info_hat, I_hat_plus=c._base_ig + cfg.infogain.w_obs * obs_now,
+                        is_outlier=bool(c.is_outlier))
             sched_time += time.perf_counter() - ts
 
             airtime_avail += budget_per_window
@@ -175,6 +205,8 @@ def run(cfg: SimConfig, precomputed=None, collect_graph: bool = False,
                 c.attempts = attempts
                 c.delivered = ok
                 c.t_recv = t_recv
+                if collect_tx:
+                    tx_window.append(c)
                 dt_actual = t_recv - c.t_created
                 gamma_ctl.observe(dt_actual, not ok)
                 if ok:
@@ -198,6 +230,9 @@ def run(cfg: SimConfig, precomputed=None, collect_graph: bool = False,
 
         # ---- server: ingest this window's arrivals, re-optimise, republish ----
         new_edges = [c for c in delivered if not getattr(c, "_ingested", False)]
+        if collect_tx and tx_window:
+            # I_exact against the server graph *before* this window's insertions.
+            _log_exact(graph, tx_window, om, iexact_rng, iexact_fraction)
         for c in new_edges:
             c._ingested = True
             dt = c.t_recv - c.t_created
@@ -210,6 +245,19 @@ def run(cfg: SimConfig, precomputed=None, collect_graph: bool = False,
                                theta_temporal=float(np.exp(-gamma_ctl.value * max(dt, 0.0))))
             graph.add_edge(graph.idx((c.rid_from, c.idx_from)),
                            graph.idx((c.rid_to, c.idx_to)), c.z, om, c.theta)
+
+        if collect_tx and tx_window:
+            for c in tx_window:
+                th_arr = c.theta if c.delivered else 0.0
+                I_ex = c._log.get("I_exact", float("nan"))
+                I_arr = 0.5 * np.log1p(th_arr * np.expm1(2.0 * I_ex)) if np.isfinite(I_ex) else float("nan")
+                c._log.update(t_sent=c.t_sent, t_arrival=c.t_recv if c.delivered else float("nan"),
+                              delivered=bool(c.delivered), attempts=c.attempts,
+                              actual_arrival_age=(c.t_recv - c.t_created) if c.delivered else float("nan"),
+                              theta_arrival=th_arr, delta_theta=c._log["theta_schedule"] - th_arr,
+                              I_theta_arrival=I_arr, R=I_arr / (I_ex + 1e-9) if np.isfinite(I_ex) else float("nan"))
+                tx_log.append(c._log)
+            tx_window = []
 
         if new_edges and (wi % max(w.fusion_every_windows, 1) == 0):
             Xk, _ = graph.optimize(iterations=6)
@@ -273,6 +321,8 @@ def run(cfg: SimConfig, precomputed=None, collect_graph: bool = False,
         gamma_final=float(gamma_ctl.value),
         dt_pred_bias=float(np.mean(dt_errors)) if dt_errors else float("nan"),
     )
+    if collect_tx:
+        res.extras["tx_log"] = tx_log
     if collect_diag:
         res.extras["diag"] = _diag_records(cands, w.n_robots)
     if collect_graph:
@@ -291,6 +341,35 @@ def run(cfg: SimConfig, precomputed=None, collect_graph: bool = False,
         res.extras["scored"] = [c for lst in cands.values() for c in lst
                                 if hasattr(c, "_win")]
     return res
+
+
+def _log_exact(graph, txs, om, rng, fraction):
+    """Eq. (13): I_exact = 1/2 log det(I + Omega J Sigma_ij J^T) for each
+    transmitted constraint, with Sigma from the server graph's current Hessian
+    (odometry + previously ingested, trust-weighted edges; same damping and
+    gauge anchor as PoseGraph.optimize) and J the SE(2) relative-pose Jacobian
+    at the current estimate. Same quantity as the S7-C validation."""
+    import scipy.sparse.linalg as spla
+    from .posegraph import error_and_jacobians
+    pick = [c for c in txs if rng.random() < fraction]
+    for c in txs:
+        c._log["I_exact"] = float("nan")
+    if not pick:
+        return
+    H, X = graph.hessian()
+    lu = spla.splu(H.tocsc())
+    n = H.shape[0]
+    for c in pick:
+        i = graph.idx((c.rid_from, c.idx_from))
+        j = graph.idx((c.rid_to, c.idx_to))
+        ix = [3 * i, 3 * i + 1, 3 * i + 2, 3 * j, 3 * j + 1, 3 * j + 2]
+        E = np.zeros((n, 6))
+        E[ix, range(6)] = 1.0
+        S = lu.solve(E)[ix, :]
+        _, A, B = error_and_jacobians(X[i], X[j], c.z)
+        J = np.hstack([A, B])
+        sign, logdet = np.linalg.slogdet(np.eye(3) + om @ (J @ S @ J.T))
+        c._log["I_exact"] = float(0.5 * logdet) if sign > 0 else 0.0
 
 
 def _diag_records(cands, n_robots):
@@ -376,6 +455,15 @@ def _score_batch(cands, queue_of, cfg, gamma, gamma_ctl, truths, cov, degree,
                                                     if pair_obs else 0.0)
         th, ig = agent.on_declare(th, ig)
         c.theta_hat, c.info_hat = th, ig
+        # Components kept for the ranking-v2 policies (tw_*) and the tx log:
+        # blended spatial trust term, surrogate inputs, location, queue ahead.
+        sp_ = max(0.0, 1.0 - (res / cfg.trust.tau_e) ** cfg.trust.p)
+        conf = 1.0 / (1.0 + (w.speed * max(map_age, 0.0)) / cfg.trust.tau_e)
+        c._spatial = conf * sp_ + (1.0 - conf)
+        c._nov, c._deg, c._loop = nov, deg, loop
+        c._xy = truths[rid].odom[c.idx_from][:2]
+        c._queue_ahead = queue_of[id(c)]
+        c._base_ig = base_ig
         # Surrogate inputs kept for the submodular schedulers, which rescore
         # candidates inside the greedy loop.
         c.xy_from, c.degree_from, c.loop_len = truths[rid].odom[c.idx_from][:2], deg, loop

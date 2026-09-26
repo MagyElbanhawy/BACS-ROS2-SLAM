@@ -1,0 +1,5 @@
+condition,overrides,n_transmitted,deferral_median_s,deferral_mean_s,gamma_if_used,cells_with_zero_tx,cells
+C0,{},1280,72.0,105.37370209999999,0.009627044174443685,0,40
+C1,"{""lora.duty_cycle"": 0.005}",160,0.0,85.65,,30,40
+C2,"{""lora.sf"": 9}",0,,,,40,40
+C3,"{""channel.loss_rate"": 0.2}",1280,72.0,105.39206115000002,0.009627044174443685,0,40

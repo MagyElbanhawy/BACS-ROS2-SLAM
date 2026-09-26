@@ -1,0 +1,26 @@
+{
+  "C3": {
+    "overrides": {
+      "channel.loss_rate": 0.2
+    },
+    "t_defer": 105.39206115000002
+  },
+  "C0": {
+    "overrides": {},
+    "t_defer": 155.0
+  },
+  "C1": {
+    "overrides": {
+      "lora.duty_cycle": 0.005,
+      "scheduler.window_s": 120.0
+    },
+    "t_defer": 77.79362719999999
+  },
+  "C2": {
+    "overrides": {
+      "lora.sf": 9,
+      "scheduler.window_s": 200.0
+    },
+    "t_defer": 88.34485004862238
+  }
+}

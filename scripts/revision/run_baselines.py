@@ -119,7 +119,7 @@ def figure(summary: pd.DataFrame, path: Path) -> None:
     ax.set_axisbelow(True)
     for side in ("top", "right"):
         ax.spines[side].set_visible(False)
-    ax.legend(ncol=4, fontsize=8, frameon=False, loc="upper right")
+    ax.legend(ncol=7, fontsize=8, frameon=False, loc="upper center", bbox_to_anchor=(0.5, -0.13))
     ax.set_ylim(0, None)
     fig.tight_layout()
     fig.savefig(path)

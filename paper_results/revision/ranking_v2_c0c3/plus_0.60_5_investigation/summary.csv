@@ -1,0 +1,14 @@
+check,result
+grid: settings matching both cells,[]
+seeds N=2 deferral_derived: row-wise matches 4/30; values found anywhere in the frozen column 4/30,
+seeds N=2 derived: row-wise matches 0/30; values found anywhere in the frozen column 0/30,
+seeds N=2 fixed: row-wise matches 0/30; values found anywhere in the frozen column 0/30,
+seeds N=3 deferral_derived: row-wise matches 1/30; values found anywhere in the frozen column 1/30,
+seeds N=3 derived: row-wise matches 0/30; values found anywhere in the frozen column 0/30,
+seeds N=3 fixed: row-wise matches 0/30; values found anywhere in the frozen column 0/30,
+mechanism hyperbolic (0.3; 6): matches frozen 0.60_5 0/4; matches frozen 0.30_6 2/4,
+mechanism hyperbolic (0.6; 5): matches frozen 0.60_5 0/4; matches frozen 0.30_6 1/4,
+mechanism linear_deficit (0.3; 6): matches frozen 0.60_5 0/4; matches frozen 0.30_6 1/4,
+mechanism linear_deficit (0.6; 5): matches frozen 0.60_5 0/4; matches frozen 0.30_6 1/4,
+mechanism ordered_pair (0.3; 6): matches frozen 0.60_5 0/4; matches frozen 0.30_6 1/4,
+mechanism ordered_pair (0.6; 5): matches frozen 0.60_5 1/4; matches frozen 0.30_6 0/4,

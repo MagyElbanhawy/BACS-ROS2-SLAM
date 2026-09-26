@@ -172,6 +172,10 @@ def main() -> int:
              "align_rmse", "gamma", "n_delivered",
              "trust_yield", "airtime_util", "dt_bias"]
         ]
+        # as_completed returns cells in completion order; restore the
+        # deterministic (N, seed, rule) order so raw.csv is reproducible.
+        raw["_r"] = raw["rule"].map({r: i for i, r in enumerate(RULES)})
+        raw = raw.sort_values(["n_robots", "seed", "_r"]).drop(columns="_r").reset_index(drop=True)
 
         raw.to_csv(
             OUT / "raw.csv",
