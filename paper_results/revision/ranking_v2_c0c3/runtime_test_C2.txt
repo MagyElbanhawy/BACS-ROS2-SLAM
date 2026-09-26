@@ -1,0 +1,1 @@
+test C2: 120 cells, wall 1460 s in this invocation (2026-09-26 16:39), 16 workers

@@ -1,1 +1,5 @@
 test C0: 120 cells, wall 126 s in this invocation (2026-09-26 10:11), 4 workers
+test C0: 120 cells, wall 0 s in this invocation (2026-09-26 12:18), 4 workers
+test C0: 120 cells, wall 126 s in this invocation (2026-09-26 10:11), 4 workers
+test C0: 120 cells, wall 1982 s in this invocation (2026-09-26 15:35), 20 workers
+test C0: 120 cells, wall 0 s in this invocation (2026-09-26 15:45), 16 workers

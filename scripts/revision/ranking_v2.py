@@ -112,10 +112,30 @@ def run_cell(job):
     return cname, seed, n, time.time() - t0, False
 
 
+# Relative cost of one cell by team size (measured on C0: 36 / 48 / 70 / 140 s per cell).
+N_WEIGHT = {2: 1.0, 3: 1.33, 4: 1.94, 5: 3.9}
+
+
+def _cell_path(job):
+    return CELLS / job[0] / job[1] / f"{job[3]}_{job[4]}.pkl"
+
+
+def _fmt(sec):
+    sec = max(sec, 0.0)
+    return f"{int(sec // 3600)}h{int(sec % 3600 // 60):02d}m" if sec >= 3600 else f"{sec / 60:.1f} min"
+
+
 def execute(phase, jobs, workers):
+    """Run all jobs, one condition at a time, printing per-condition progress and an
+    overall time-remaining estimate. Cached cells are skipped and excluded from the
+    estimate, which is based on the N-weighted cost of the cells computed so far."""
     by_cond = {}
     for j in jobs:
         by_cond.setdefault(j[1], []).append(j)
+    todo_w = sum(N_WEIGHT[j[4]] for j in jobs if not _cell_path(j).exists())
+    done_w, t_start = 0.0, time.time()
+    print(f"[{phase}] {sum(not _cell_path(j).exists() for j in jobs)} of {len(jobs)} cells to compute "
+          f"({len(jobs) - sum(not _cell_path(j).exists() for j in jobs)} cached), {workers} workers", flush=True)
     for cname, cj in by_cond.items():
         cj.sort(key=lambda j: -j[4])  # largest N first for load balance
         t0, done, total = time.time(), 0, len(cj)
@@ -124,10 +144,15 @@ def execute(phase, jobs, workers):
             for fut in as_completed([pool.submit(run_cell, j) for j in cj]):
                 _, seed, n, dt, cached = fut.result()
                 done += 1
-                el = time.time() - t0
+                if not cached:
+                    done_w += N_WEIGHT[n]
+                el = time.time() - t_start
+                rate = el / done_w if done_w else float("nan")   # wall seconds per unit weight
+                left = (todo_w - done_w) * rate if done_w else float("nan")
+                eta = _fmt(left) if done_w else "estimating..."
                 print(f"[{phase}] {cname} {done}/{total} seed={seed} N={n} "
-                      f"{'cached' if cached else f'{dt:.0f}s'} elapsed {el / 60:.1f} min "
-                      f"eta {el / done * (total - done) / 60:.1f} min", flush=True)
+                      f"{'cached' if cached else f'{dt:.0f}s'} | total {100 * done_w / todo_w if todo_w else 100:.0f}% "
+                      f"done, elapsed {_fmt(el)}, remaining ~{eta}", flush=True)
         with (OUT / f"runtime_{phase}_{cname}.txt").open("a") as handle:  # one line per invocation
             handle.write(f"{phase} {cname}: {total} cells, wall {time.time() - t0:.0f} s in this invocation "
                          f"({time.strftime('%Y-%m-%d %H:%M')}), {workers} workers\n")

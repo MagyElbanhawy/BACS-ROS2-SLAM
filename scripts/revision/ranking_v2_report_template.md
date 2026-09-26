@@ -19,6 +19,49 @@ window, expiry and greedy packing, by I_tw / T_air, where I_tw = ½ log(1 + θ (
 | `tw_arrival` | spatial term · e^(−γ A_c), A_c = k_c W + queue ahead + T_air + retry |
 | `tw_arrival_sub` | as `tw_arrival`, plus diminishing returns inside the greedy loop |
 
+## Findings
+
+**1. The primary hypothesis is rejected in every condition.** `tw_now` (chosen on DEV) has a
+*higher* mean map-alignment RMSE than Random: +32 % (C0), +47 % (C1), +31 % (C2), +28 % (C3),
+pooled over 120 seed-team pairs, Holm p = 0.012, < 1e-4, < 1e-4 and 0.005. It is also 35–51 % worse
+than BACS+ (0.30, 6) (Holm p < 1e-4 in all conditions). Against FIFO it is no better in C0, C1 and C3,
+and worse in C2. The other two TW variants behave the same way.
+
+**2. Ablation.** Adding trust weighting to the information-density ranking (`info_only` → `tw_now`)
+raises the alignment error by 23–38 % in every condition (Holm p ≤ 0.0006). Arrival-age trust
+(`tw_now` → `tw_arrival`) adds another 1–4 %, significant only in C0 and C3. Within-window
+diminishing returns (`tw_arrival` → `tw_arrival_sub`) changes nothing (Holm p ≥ 0.39).
+
+**3. Ranking of the existing policies.** BACS+ (0.30, 6) has the lowest mean alignment RMSE in all
+four conditions (0.204 / 0.305 / 0.400 / 0.204 m). BACS, Info-only and Random form the next group
+(0.22–0.44 m depending on condition). FIFO, LIFO, Trust-only and the three TW variants are worst.
+
+**4. Why trust weighting hurts: fresh outliers.** The TW variants achieve what they optimise.
+Mean server trust at arrival rises from about 0.42 (BACS) to 0.54–0.56, arrival age falls from about
+107 s to 76–83 s, and C0 sees fewer outliers transmitted. But:
+
+- **The transmitter cannot tell outliers from inliers.** Its predicted spatial term is about 0.99
+  for every policy, because the confidence blend pushes it towards 1 as the map ages. So predicted
+  trust varies only through exp(−γ·age), and TW reduces to "prefer fresh constraints", with
+  information as a tie-breaker.
+- **The server's age decay was acting as an outlier guard.** Under BACS, BACS+ and Random, an
+  outlier arrives old and gets server trust of about 0.013–0.023. Under TW (and LIFO) it arrives
+  fresh and gets about 0.19–0.21 in C0 (0.37–0.39 in C1 and C2). The outliers' share of the
+  trust-weighted evidence therefore rises about 8× (see the outlier-mechanism tables below).
+- **That share predicts the error.** Within each (seed, N) cell, a run's outlier share of trust
+  weight correlates with its alignment RMSE (Spearman 0.57–0.69 across conditions).
+- **The mean is driven by failures.** TW's *median* alignment error is close to BACS's, but 17–50 %
+  of TW runs exceed 0.5 m, against 1–20 % for BACS+.
+
+In short, "expected effective information at the server" assumes the transmitter's θ̂ predicts the
+server's trust. In this simulator θ̂ carries no outlier information, so weighting by it only buys
+freshness. Freshness removes the implicit protection that staleness gave against wrong data
+associations.
+
+**5. Why Random does as well as BACS.** Random neither favours fresh constraints (so outliers still
+arrive stale and down-weighted) nor starves any age class. Its median arrival age is between FIFO's
+and the TW variants'. Its outlier share of trust weight stays at the BACS level.
+
 ## DEV decision (seeds 0–9, C0)
 
 {decision}

@@ -42,6 +42,32 @@ METRICS = ["align_rmse", "pose_rmse", "trust_yield", "n_delivered", "airtime_uti
            "median_age_arrival", "mean_R"]
 
 
+def _ensure_test_raw(cond: str) -> str:
+    """Make sure <cond>/test_raw.csv and the tx log exist.
+
+    `ranking_v2.py test` writes them only after every condition has finished, so a
+    condition whose 120 cells are all cached is assembled here from the cache.
+    Returns a status string for printing."""
+    d = OUT / cond
+    if (d / "test_raw.csv").exists() and (d / f"tx_log_test_{cond}.csv").exists():
+        return "ready (test_raw.csv)"
+    cells = sorted((OUT / "_cells" / "test" / cond).glob("*.pkl"))
+    expected = 30 * len(COUNTS)
+    if len(cells) < expected:
+        return f"not finished ({len(cells)}/{expected} cells cached) - skipped"
+    import pickle
+    rows, txs = [], []
+    for path in cells:
+        r, t = pickle.load(path.open("rb"))
+        rows += r
+        if len(t):
+            txs.append(t)
+    d.mkdir(exist_ok=True)
+    pd.DataFrame(rows).to_csv(d / "test_raw.csv", index=False, lineterminator="\n")
+    pd.concat(txs, ignore_index=True).to_csv(d / f"tx_log_test_{cond}.csv", index=False, lineterminator="\n")
+    return f"ready (assembled from {len(cells)} cached cells)"
+
+
 def chosen_variant() -> str:
     m = re.search(r"Chosen variant: `(\w+)`", (OUT / "decision.md").read_text())
     return m.group(1)
@@ -124,6 +150,38 @@ def mechanism(tx: pd.DataFrame) -> pd.DataFrame:
             "I_exact_fraction_computed": d.I_exact.notna().mean(),
         })
     return pd.DataFrame(rows)
+
+
+def outlier_mechanism(tx: pd.DataFrame, raw: pd.DataFrame) -> tuple[pd.DataFrame, float]:
+    """How much trust-weighted evidence the delivered outliers carry, per policy.
+
+    Returns the per-policy table and the within-cell Spearman correlation between a
+    run's outlier weight share (sum of server trust on outliers / sum on all
+    delivered constraints) and its map-alignment RMSE, both centred on the
+    (seed, N) cell mean so that world difficulty cancels."""
+    t = tx.assign(w_out=tx.theta_arrival * tx.is_outlier)
+    per = t.groupby(["policy", "seed", "n_robots"]).agg(w_out=("w_out", "sum"), w_all=("theta_arrival", "sum"),
+                                                        n_out=("is_outlier", "sum")).reset_index()
+    per["outlier_weight_share"] = per.w_out / per.w_all
+    m = per.merge(raw, on=["policy", "seed", "n_robots"])
+    g = m.groupby("policy").agg(outliers_transmitted=("n_out", "sum"), outlier_theta_sum=("w_out", "sum"),
+                                outlier_weight_share=("outlier_weight_share", "mean"),
+                                align_mean=("align_rmse", "mean"), align_median=("align_rmse", "median"),
+                                catastrophic_share=("align_rmse", lambda a: float((a > 0.5).mean()))).loc[POLICIES]
+    g["server_theta_per_outlier"] = g.outlier_theta_sum / g.outliers_transmitted
+    g = g.drop(columns="outlier_theta_sum").reset_index()
+    x = m.outlier_weight_share - m.groupby(["seed", "n_robots"]).outlier_weight_share.transform("mean")
+    y = m.align_rmse - m.groupby(["seed", "n_robots"]).align_rmse.transform("mean")
+    return g, float(st.spearmanr(x, y)[0])
+
+
+def fmt_outliers(g: pd.DataFrame, rho: float) -> str:
+    rows = [[LABEL[r.policy], int(r.outliers_transmitted), f"{r.server_theta_per_outlier:.3f}",
+             f"{r.outlier_weight_share:.3f}", f"{r.align_mean:.3f}", f"{r.align_median:.3f}",
+             f"{100 * r.catastrophic_share:.0f} %"] for r in g.itertuples()]
+    return (table(["policy", "outliers transmitted", "server θ per outlier", "outlier share of trust weight",
+                   "align mean (m)", "align median (m)", "runs > 0.5 m"], rows)
+            + f"\n\nWithin-cell Spearman ρ(outlier share of trust weight, alignment RMSE) = {rho:.2f} (1200 runs).")
 
 
 # ------------------------------------------------------------------ figures
@@ -261,9 +319,15 @@ def main():
     matplotlib.use("Agg")
     chosen = chosen_variant()
     summaries, trend_rows, sections = {}, [], []
+    ready = {c: _ensure_test_raw(c) for c in CONDS}
+    for c, state in ready.items():
+        print(f"{c}: {state}")
+    if not any(v.startswith("ready") for v in ready.values()):
+        sys.exit("No condition has finished its TEST run yet (see the counts above). Run "
+                 "`python3 scripts/revision/ranking_v2.py test C0 C1 C2 C3` to completion first.")
     for c in CONDS:
         d = OUT / c
-        if not (d / "test_raw.csv").exists():
+        if not ready[c].startswith("ready"):
             continue
         raw = pd.read_csv(d / "test_raw.csv")
         tx = pd.read_csv(d / f"tx_log_test_{c}.csv")
@@ -273,6 +337,8 @@ def main():
         t.to_csv(d / "test_paired_tests.csv", index=False, lineterminator="\n")
         m = mechanism(tx)
         m.to_csv(d / "mechanism.csv", index=False, lineterminator="\n")
+        om, rho = outlier_mechanism(tx, raw)
+        om.to_csv(d / "outlier_mechanism.csv", index=False, lineterminator="\n")
         summaries[c] = s
         for r in t[(t.policy == chosen) & (t.versus == "random")].itertuples():
             trend_rows.append({"condition": c, "n_robots": r.n_robots, "chosen": chosen,
@@ -286,13 +352,17 @@ def main():
                         f"{fmt_extra(s)}\n\n**Paired tests on map-alignment RMSE** (Δ and diff negative = first "
                         f"policy lower; won = pairs where it is lower; Holm within each family, 5 tests per "
                         f"comparison)\n\n{fmt_tests(t)}\n\n**Mechanism (all transmitted constraints, pooled over N)**"
-                        f"\n\n{fmt_mech(m)}\n")
+                        f"\n\n{fmt_mech(m)}\n\n**Outlier mechanism** (`outlier_mechanism.csv`)\n\n{fmt_outliers(om, rho)}\n")
     trend = pd.DataFrame(trend_rows)
     trend.to_csv(OUT / "stress_trend.csv", index=False, lineterminator="\n")
     if "C0" in summaries:
         fig_ablation(summaries["C0"], OUT / "fig_ablation.png")
     fig_mechanism(summaries, OUT / "fig_mechanism.png")
     fig_stress(trend, chosen, OUT / "fig_stress.png")
+    missing = [c for c in CONDS if c not in summaries]
+    if missing:
+        print(f"NOTE: {', '.join(missing)} not finished; tables, figures and REPORT.md cover "
+              f"{', '.join(summaries)} only. Re-run this script when the TEST run completes.")
 
     cond = json.loads((OUT / "conditions.json").read_text())
     crow = [[c, json.dumps(cond[c]["overrides"]), f"{cond[c]['t_defer']:.1f}", f"{math.log(2) / cond[c]['t_defer']:.5f}"]
