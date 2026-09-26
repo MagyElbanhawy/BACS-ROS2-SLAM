@@ -16,8 +16,8 @@ from .lora import Channel, time_on_air, airtime_budget
 from .trust import GammaController, predicted_delay, predicted_trust, server_trust
 from .infogain import CoverageMap, surrogate_info
 from .observability import PairObservability
-from .schedulers import schedule, compute_utility, TW_POLICIES, theta_now, theta_arrival, \
-    predicted_arrival_age, tw_info
+from .schedulers import OBS_POLICIES, arrival_trust, schedule, compute_utility, trust_weighted_info, \
+    TW_POLICIES, theta_now, theta_arrival, predicted_arrival_age, tw_info
 from .posegraph import PoseGraph
 from .agents import make_agent
 
@@ -50,8 +50,12 @@ def _odometry_information(cfg):
 
 
 def run(cfg: SimConfig, precomputed=None, collect_graph: bool = False,
-        collect_tx: bool = False, iexact_fraction: float = 1.0) -> RunResult:
+        collect_tx: bool = False, iexact_fraction: float = 1.0,
+        collect_diag: bool = False) -> RunResult:
     """Run one session.
+
+    collect_diag: stale-information diagnostics of the *_tw ranking-v2 study
+    (res.extras["diag"]).
 
     collect_tx: log every transmitted constraint in res.extras["tx_log"] (ranking
     v2 mechanism analysis), including I_exact against the server graph before
@@ -66,7 +70,7 @@ def run(cfg: SimConfig, precomputed=None, collect_graph: bool = False,
     # BACS+ observability term is active for the bacs_plus policy or when
     # explicitly switched on for an ablation.
     use_obs = (cfg.scheduler.use_observability
-               or cfg.scheduler.policy == "bacs_plus"
+               or cfg.scheduler.policy in OBS_POLICIES
                or cfg.scheduler.policy in TW_POLICIES)
     tx_log: List[dict] = []
     tx_window: List = []
@@ -181,6 +185,16 @@ def run(cfg: SimConfig, precomputed=None, collect_graph: bool = False,
             chosen_ids = set(id(c) for c in chosen)
 
             t_cursor = t0
+            if collect_diag:
+                # Read-only snapshot at the scheduling decision (ranking v2
+                # stale-information diagnostics); no state or RNG is touched.
+                for c in chosen:
+                    c._diag = dict(window=wi, age_sched=max(t0 - c.t_created, 0.0),
+                                   theta_sched=float(c.theta_hat),
+                                   theta_arr_pred=arrival_trust(c.theta_hat, t0 - c.t_created, gamma),
+                                   I_plus=float(c._I_plus), I_base=float(c._I_base),
+                                   t_air=time_on_air(c.payload_bytes, cfg.lora),
+                                   deferrals=int(c.deferrals))
             for c in chosen:
                 c.t_sent = max(t_cursor, c.t_created)
                 ok, t_recv, used, attempts = channel.transmit(c.payload_bytes, c.t_sent)
@@ -225,6 +239,10 @@ def run(cfg: SimConfig, precomputed=None, collect_graph: bool = False,
             pred = relative(fused[c.rid_from][c.idx_from], fused[c.rid_to][c.idx_to])
             c.theta = server_trust(float(np.linalg.norm((c.z - pred)[:2])),
                                    dt, cfg.trust, gamma_ctl.value)
+            if collect_diag:
+                e = float(np.linalg.norm((c.z - pred)[:2]))
+                c._diag.update(theta_spatial=max(0.0, 1.0 - (e / cfg.trust.tau_e) ** cfg.trust.p),
+                               theta_temporal=float(np.exp(-gamma_ctl.value * max(dt, 0.0))))
             graph.add_edge(graph.idx((c.rid_from, c.idx_from)),
                            graph.idx((c.rid_to, c.idx_to)), c.z, om, c.theta)
 
@@ -305,6 +323,8 @@ def run(cfg: SimConfig, precomputed=None, collect_graph: bool = False,
     )
     if collect_tx:
         res.extras["tx_log"] = tx_log
+    if collect_diag:
+        res.extras["diag"] = _diag_records(cands, w.n_robots)
     if collect_graph:
         # Exposed for the S7 surrogate-validation experiment, which needs the
         # converged graph, its Hessian, and the delivered constraints to compute
@@ -350,6 +370,28 @@ def _log_exact(graph, txs, om, rng, fraction):
         J = np.hstack([A, B])
         sign, logdet = np.linalg.slogdet(np.eye(3) + om @ (J @ S @ J.T))
         c._log["I_exact"] = float(0.5 * logdet) if sign > 0 else 0.0
+
+
+def _diag_records(cands, n_robots):
+    """One row per transmitted constraint for the stale-information analysis."""
+    rows = []
+    for lst in cands.values():
+        for c in lst:
+            d = getattr(c, "_diag", None)
+            if d is None:
+                continue
+            r = dict(d, rid_from=c.rid_from, rid_to=c.rid_to, t_created=c.t_created,
+                     is_outlier=bool(c.is_outlier), attempts=int(c.attempts),
+                     delivered=bool(c.delivered), age_send=c.t_sent - c.t_created,
+                     age_arrival=(c.t_recv - c.t_created) if c.delivered else float("nan"),
+                     theta_server=float(c.theta) if c.delivered else float("nan"))
+            r["I_tw_sched"] = trust_weighted_info(r["I_plus"], r["theta_sched"])
+            r["I_tw_arrival"] = (trust_weighted_info(r["I_plus"], r["theta_server"])
+                                 if c.delivered else 0.0)
+            r["retention"] = r["I_tw_arrival"] / (r["I_plus"] + 1e-9)
+            r["delta_theta"] = r["theta_sched"] - r["theta_server"] if c.delivered else float("nan")
+            rows.append(r)
+    return rows
 
 
 def _align_first(est, gt):
@@ -406,6 +448,11 @@ def _score_batch(cands, queue_of, cfg, gamma, gamma_ctl, truths, cov, degree,
         obs = pair_obs.score(c.rid_from, c.rid_to) if (use_obs and pair_obs) else 0.0
         base_ig = surrogate_info(nov, deg, loop, cfg.infogain, observability=0.0)
         ig = base_ig + cfg.infogain.w_obs * obs if use_obs else base_ig
+        # Policy-independent I_hat_plus, logged by the diagnostics so that all
+        # policies are scored on the same information scale.
+        c._I_base = base_ig
+        c._I_plus = base_ig + cfg.infogain.w_obs * (pair_obs.score(c.rid_from, c.rid_to)
+                                                    if pair_obs else 0.0)
         th, ig = agent.on_declare(th, ig)
         c.theta_hat, c.info_hat = th, ig
         # Components kept for the ranking-v2 policies (tw_*) and the tx log:
@@ -417,6 +464,9 @@ def _score_batch(cands, queue_of, cfg, gamma, gamma_ctl, truths, cov, degree,
         c._xy = truths[rid].odom[c.idx_from][:2]
         c._queue_ahead = queue_of[id(c)]
         c._base_ig = base_ig
+        # Surrogate inputs kept for the submodular schedulers, which rescore
+        # candidates inside the greedy loop.
+        c.xy_from, c.degree_from, c.loop_len = truths[rid].odom[c.idx_from][:2], deg, loop
         c.utility = compute_utility(c, cfg.scheduler, cfg.lora)
         if log_window is not None and not hasattr(c, "_win"):
             # First time this candidate is scored: snapshot for S7-C. `_obs` is

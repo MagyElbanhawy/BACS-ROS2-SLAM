@@ -3,7 +3,7 @@
 
     python scripts/revision/ranking_v2_analysis.py
 
-Reads paper_results/revision/ranking_v2/{decision.md, conditions.json, pilot_tdefer*.csv,
+Reads paper_results/revision/ranking_v2_c0c3/{decision.md, conditions.json, pilot_tdefer*.csv,
 dev_raw.csv, C*/test_raw.csv, C*/tx_log_test_C*.csv} and writes the per-condition tables,
 stress_trend.csv, fig_*.png and REPORT.md (narrative from ranking_v2_report_template.md).
 """
@@ -24,7 +24,7 @@ ROOT = HERE.parents[1]
 sys.path.insert(0, str(HERE))
 from stats import describe, holm, paired  # noqa: E402
 
-OUT = ROOT / "paper_results" / "revision" / "ranking_v2"
+OUT = ROOT / "paper_results" / "revision" / "ranking_v2_c0c3"
 CONDS = ["C0", "C1", "C2", "C3"]
 COUNTS = [2, 3, 4, 5]
 POLICIES = ["fifo", "lifo", "random", "trust_only", "info_only", "bacs_gated", "plus_0.30_6",

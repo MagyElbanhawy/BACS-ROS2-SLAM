@@ -4,7 +4,7 @@
     python scripts/revision/plus060_investigation.py [--workers 1]
 
 Three checks against paper_results/simulation/frozen/s8_30seed_raw.csv, written to
-paper_results/revision/ranking_v2/plus_0.60_5_investigation/:
+paper_results/revision/ranking_v2_c0c3/plus_0.60_5_investigation/:
   grid.csv       bacs_plus over w_obs x obs_ref (deferral-derived gamma) at two cells
                  (seed 10 N=2, seed 11 N=3): which settings reproduce each frozen value?
   seeds.csv      bacs_plus(0.60, 5) for all 30 seeds at N=2, 3 under three gamma rules:
@@ -24,7 +24,7 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-OUT = ROOT / "paper_results" / "revision" / "ranking_v2" / "plus_0.60_5_investigation"
+OUT = ROOT / "paper_results" / "revision" / "ranking_v2_c0c3" / "plus_0.60_5_investigation"
 FROZEN = ROOT / "paper_results" / "simulation" / "frozen" / "s8_30seed_raw.csv"
 
 

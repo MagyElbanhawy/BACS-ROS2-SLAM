@@ -10,6 +10,8 @@ The ROS 2 package separates constraint representation, FIFO/BACS/BACS+ ranking, 
 
 The physical platform uses two modified AgileX LIMO differential-drive robots (LIMO-01 and LIMO-02), Ubuntu 22.04, ROS 2 Humble, EAI T-mini Pro 2D LiDAR, Orbbec DaBai RGB-D camera, Intel NUC i7 computers, Vicon ground truth, and RYLR998 LoRa at 868 MHz/SF7/125 kHz/CR 4/5. The regulatory configuration is a 1% duty-cycle ceiling in a 60 s window. Physical evidence covers FIFO, BACS, and BACS+ sessions, each carrying ten logged runs. It does not establish physical scalability beyond two robots.
 
+The repository also includes a **planned** rerun configuration for follow-up hardware experiments: `/fused_poses` bag logging, a 0.05 trust gate with information-density ranking, a surplus-candidate profile that can bind the 0.6 s/min airtime budget, and a 12-minute interleaved FIFO/BACS/BACS+ protocol. These settings are documented in `config/hardware_experiment_profiles.yaml` and `docs/HARDWARE_EXPERIMENT_V2.md`; they are configuration and protocol updates, not completed measurements.
+
 ## Simulation validation - N=2-5
 
 The simulation is deterministic and explicitly separate from physical evidence. It runs seeds 10-39 for N=2-5 plus S7-C-style incremental, S9 temporal-decay, and policy-ablation outputs. Simulation output must not be interpreted as a physical measurement.
@@ -38,6 +40,12 @@ python scripts/revision/run_decay.py               # S9 decay rules, 30 seeds
 python -m pytest -q
 ```
 
+For the offline public-dataset replay path, see `docs/PUBLIC_DATASET_REPLAY.md` and run:
+
+```sh
+python -m scripts.repro.replay_public_dataset /path/to/MRCLAM_Dataset1 --out paper_results/public_dataset
+```
+
 ## Physical results
 
 The physical evidence is HWS-002-FIFO, HWS-003-BACS and HWS-005-BACS+. The paper's physical
@@ -46,6 +54,8 @@ median channel delay (0.170 / 0.170 / 0.171 s), their ratio (902 / 835 / 973), c
 transmitted per session (141 / 139 / 137) and airtime of about 10 % of the duty-cycle budget.
 Physical map-alignment RMSE is not available because the bags do not contain fused poses.
 See `PAPER_TRACEABILITY.md`, `REPRODUCIBILITY_REPORT.md` and `paper_results/revision/REPORT.md`.
+
+Future reruns should instead use the implemented V2 configuration, which records `/fused_poses` in the bag and keeps the separate CSV logger for compatibility with the existing replay workflow.
 
 The former `HWS-101` … `HWS-130` sessions are synthetic and are now in
 `synthetic_test_fixtures/` (see its README).

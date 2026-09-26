@@ -1,0 +1,64 @@
+hardware_rerun:
+  bag_topics:
+    - /tf
+    - /tf_static
+    - /scan/limo01
+    - /scan/limo02
+    - /odom/limo01
+    - /odom/limo02
+    - /vicon/limo01/pose
+    - /vicon/limo02/pose
+    - /bacs/candidates
+    - /bacs/scheduler
+    - /bacs/received
+    - /bacs/keyframes
+    - /bacs/kf_desc
+    - /bacs/kf_request
+    - /fused_poses
+    - /map
+  scheduler:
+    default:
+      trust_threshold: 0.05
+      ranking: information_density
+      defer_half_life_s: 155.0
+      window_s: 60.0
+      duty_cycle: 0.01
+    bacs_plus:
+      observability_weight: 0.30
+      observability_reference: 6
+  candidate_generation:
+    default:
+      keyframe_period_s: 2.0
+      min_motion_m: 0.05
+      min_rotation_deg: 5.0
+      shortlist: 3
+      place_threshold: 0.12
+    surplus_candidates:
+      keyframe_period_s: 1.0
+      min_motion_m: 0.02
+      min_rotation_deg: 2.0
+      shortlist: 6
+      place_threshold: 0.16
+      target_candidates_per_10_min: 60
+  airtime_budget:
+    target_airtime_s_per_min: 0.6
+  interleaved_protocol:
+    segment_minutes: 12
+    policies: [FIFO, BACS, BACS+]
+    rotations:
+      - [FIFO, BACS, BACS+]
+      - [BACS, BACS+, FIFO]
+      - [BACS+, FIFO, BACS]
+    reset_between_segments: true
+    randomize_rotation_cycle: true
+    metadata:
+      - session_id
+      - block_index
+      - segment_index
+      - segment_policy
+      - run_order
+      - robot_battery_before
+      - robot_battery_after
+      - lighting_notes
+      - vicon_notes
+      - reset_confirmed

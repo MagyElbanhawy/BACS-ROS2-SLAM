@@ -1,13 +1,19 @@
 #!/usr/bin/env python3
-"""Ranking v2: does ranking by expected effective information at the server beat random?
+"""Ranking v2, C0-C3 study (tw_now / tw_arrival / tw_arrival_sub): does ranking by
+expected effective information at the server beat random?
+
+Independent of the *_tw study in scripts/revision/run_ranking_v2.py, whose outputs
+live in paper_results/revision/ranking_v2/; this study's outputs live in
+paper_results/revision/ranking_v2_c0c3/ (conditions: C0 nominal, C1 duty 0.5 %,
+C2 SF9, C3 20 % loss).
 
     python scripts/revision/ranking_v2.py pilot            # T_defer -> gamma for C1-C3 (DEV seeds)
     python scripts/revision/ranking_v2.py dev              # DEV seeds 0-9, C0; writes decision.md once
     python scripts/revision/ranking_v2.py test C0 C3 ...   # TEST seeds 40-69 (needs decision.md)
     python scripts/revision/ranking_v2.py analyze          # tables, figures (see ranking_v2_analysis.py)
 
-All outputs go to paper_results/revision/ranking_v2/. Per-cell results are cached in
-ranking_v2/_cells/ so an interrupted run resumes where it stopped.
+All outputs go to paper_results/revision/ranking_v2_c0c3/. Per-cell results are cached in
+ranking_v2_c0c3/_cells/ so an interrupted run resumes where it stopped.
 """
 from __future__ import annotations
 
@@ -29,7 +35,7 @@ sys.path.insert(0, str(ROOT))
 from bacs_sim.experiments import S8_ARMS, _mk, s8_config  # noqa: E402
 from bacs_sim.simulator import precompute, run  # noqa: E402
 
-OUT = ROOT / "paper_results" / "revision" / "ranking_v2"
+OUT = ROOT / "paper_results" / "revision" / "ranking_v2_c0c3"
 CELLS = OUT / "_cells"
 TW = ["tw_now", "tw_arrival", "tw_arrival_sub"]
 for _p in TW:  # I_hat_plus with w_o = 0.30, n_ref = 6

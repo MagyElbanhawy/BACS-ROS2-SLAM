@@ -53,6 +53,7 @@ class FusionNode(Node):
         self.edge_log = (self.out / "fusion_edges.csv").open("w", newline="", encoding="utf-8")
         self.core = FusionCore(self.robots, starts, params, self.edge_log)
         self.broadcaster = TransformBroadcaster(self)
+        self.fused_pub = self.create_publisher(String, p("fused_pose_topic", "/fused_poses"), 100)
         self.create_subscription(String, p("keyframe_topic", "/bacs/keyframes"), self.on_keyframe, 1000)
         self.create_subscription(String, p("constraint_topic", "/bacs/received"), self.on_constraint, 1000)
         self.create_timer(float(p("solve_period_s", 1.0)), self.on_solve)
@@ -74,8 +75,10 @@ class FusionNode(Node):
             self.core.optimize()
 
     def on_tf(self) -> None:
-        stamp = self.get_clock().now().to_msg()
+        now = self.get_clock().now()
+        stamp = now.to_msg()
         transforms = []
+        poses = []
         for robot in self.robots:
             pose = self.core.map_to_local(robot)
             if pose is None:
@@ -86,8 +89,15 @@ class FusionNode(Node):
             t.transform.translation.x, t.transform.translation.y = pose[0], pose[1]
             t.transform.rotation.z, t.transform.rotation.w = math.sin(pose[2] / 2), math.cos(pose[2] / 2)
             transforms.append(t)
+            poses.append({"robot": robot, "frame_id": self.map_frame, "child_frame_id": t.child_frame_id,
+                          "x": pose[0], "y": pose[1], "yaw": pose[2]})
         if transforms:
             self.broadcaster.sendTransform(transforms)
+            self.fused_pub.publish(String(data=json.dumps({
+                "stamp_ns": now.nanoseconds,
+                "map_frame": self.map_frame,
+                "poses": poses,
+            }, separators=(",", ":"))))
 
     def close(self) -> None:
         thetas = self.core.thetas

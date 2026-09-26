@@ -15,6 +15,8 @@ fixtures (`HWS-101` … `HWS-130`) as physical evidence. Those files are now in
 | Physical: deferral, channel delay, ratio, packets sent, airtime | **Reproduced** (byte-identical) | `paper_results/physical/timing_summary.csv`, `radio_summary.csv`, `session_counts.csv`; `scripts/revision/check_physical_claims.py` |
 | Physical: map-alignment RMSE | **Not available.** The bags contain no fused poses | none |
 | Physical: Wilcoxon / Cliff's δ on map alignment | **Not available** (no map-alignment data) | none |
+| Planned hardware rerun configuration | **Implemented as config/docs only; not executed** | `config/hardware_experiment_profiles.yaml`, `docs/HARDWARE_EXPERIMENT_V2.md` |
+| Public dataset candidate replay (MRCLAM) | **Pipeline implemented; dataset copy not committed** | `analysis/public_dataset/`, `scripts/repro/replay_public_dataset.py`, `docs/PUBLIC_DATASET_REPLAY.md` |
 
 ## Physical results (HWS-002-FIFO, HWS-003-BACS, HWS-005-BACS+)
 
@@ -35,6 +37,9 @@ Physical map-alignment RMSE is not available because the HWS-002/003/005 bags do
 fused poses. The recorded topics are `/bacs/scheduler`, `/odom/*`, `/scan/*`, `/tf` and
 `/vicon/*/pose`. No physical map-alignment, Wilcoxon or Cliff's δ value may be reported.
 
+The follow-up hardware rerun configuration now records `/fused_poses` alongside those topics,
+but no rerun bag has been committed and no new physical result is claimed here.
+
 ### Checkout note
 
 The Vicon CSVs and the `.db3`/`.mcap` bags are stored with Git LFS. Without `git lfs pull`
@@ -49,3 +54,11 @@ Vicon samples and bag messages per run (`timing_per_run.csv` columns `vicon_reco
 headline numbers (FIFO 0.48 ± 0.15 m, BACS+ 0.27 ± 0.09 m, p = 9.77×10⁻⁴, δ = −0.81) came
 from these fixtures. δ = −0.81 was hard-coded; computed from the fixtures it is −0.76. The
 p-value column was labelled one-sided but held the two-sided value 0.00195.
+
+## Public dataset replay
+
+`scripts/repro/replay_public_dataset.py` replays one public multi-robot dataset through the
+same FIFO/BACS/BACS+ sender policies used by the ROS stack. The repository does not commit a
+dataset copy or claim a result from one; instead it provides an offline path that accepts a
+local extracted dataset directory and writes deterministic CSV/JSON outputs under
+`paper_results/public_dataset/`.

@@ -1,4 +1,4 @@
 policy: BACS+
-trust_threshold: 0.5
+trust_threshold: 0.05
 observability_weight: 0.30
 observability_reference_constraints: 6

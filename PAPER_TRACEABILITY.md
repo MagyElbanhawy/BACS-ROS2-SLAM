@@ -37,6 +37,12 @@ Vicon range, etc.) is substituted. `scripts/repro/compute_map_alignment.py` is t
 `analysis/physical/map_alignment.py` and will produce the metric once fused-pose CSVs are
 recorded under the V2 protocol (`docs/HARDWARE_EXPERIMENT_V2.md`).
 
+**Planned rerun configuration is not evidence.** The repository now carries the requested
+follow-up rerun settings in `config/hardware_experiment_profiles.yaml` and the V2 protocol,
+including `/fused_poses` bag logging, a 0.05 trust gate, information-density ranking, a
+surplus-candidate profile, and interleaved 12-minute policy blocks. Those settings are
+implementation/configuration artifacts only until new bags and logs are recorded.
+
 **Synthetic fixtures are not evidence.** The former `hardware/raw/HWS-101-*` … `HWS-130-*`
 sessions, and the `map_alignment_*.csv` and `hardware_metrics.csv` files derived from them,
 are synthetic. They are now in `synthetic_test_fixtures/`
@@ -49,5 +55,15 @@ are synthetic. They are now in `synthetic_test_fixtures/`
 | S8 (Figs 5-9), S7-C, S9 | `bacs_sim` simulator | Seeds 10-39, N=2-5 | `paper_results/simulation/frozen/s8_30seed_raw.csv`, `paper_results/simulation/s8_*.csv` | `sim_s8_*.png` | `python -c "from pathlib import Path; from analysis.simulation.s8 import run; run(Path('.'))"` |
 | Revision v3: extra baselines (S8 protocol) | `bacs_sim` | Seeds 10-39, N=2-5, 480 s, deferral-derived γ | `paper_results/revision/baselines/*.csv` | `fig_baselines.png` | `python scripts/revision/run_baselines.py` |
 | Revision v3: decay rules (S9, 30 seeds) | `bacs_sim` | Seeds 10-39, N=2-5, 720 s | `paper_results/revision/decay/*.csv` | `fig_decay.png` | `python scripts/revision/run_decay.py` |
+| Ranking v2, `*_tw` study (TW, TW-Arrival, relative gate) | `bacs_sim` | DEV 0-9 / TEST 40-69, N=2-5; nominal, iid loss, burst, +30 s delay | `paper_results/revision/ranking_v2/` | — | `python scripts/revision/run_ranking_v2.py` |
+| Ranking v2, C0-C3 study (`tw_now`, `tw_arrival`, `tw_arrival_sub`) | `bacs_sim` | DEV 0-9 / TEST 40-69, N=2-5; C0 nominal, C1 duty 0.5 % (W=120 s), C2 SF9 (W=200 s), C3 20 % loss | `paper_results/revision/ranking_v2_c0c3/` | `fig_ablation/mechanism/stress.png` | `python scripts/revision/ranking_v2.py {pilot,dev,test}` then `ranking_v2_analysis.py` |
 
 Details, numbers and discrepancies: `paper_results/revision/REPORT.md`.
+
+## Public multi-robot dataset replay
+
+The repository also contains a reproducible offline replay path for the public UTIAS MRCLAM
+dataset (`docs/PUBLIC_DATASET_REPLAY.md`, `analysis/public_dataset/`,
+`scripts/repro/replay_public_dataset.py`). It is separate from the physical evidence above:
+dataset replay outputs are generated locally from a user-supplied public dataset copy and are
+not claimed as hardware measurements.

@@ -2,6 +2,10 @@
 
 This protocol replaces the HWS-002/003/005 dataset (see `REPRODUCIBILITY_ISSUES.md` §4). Every number the paper reports from hardware must come from files this protocol produces. New sessions are named `HWS-1xx-<POLICY>` (for example `HWS-101-FIFO`, `HWS-102-BACS`, `HWS-103-BACS+`) so they can't be confused with the old ones.
 
+The concrete rerun parameters and bag-topic manifest are versioned in
+`config/hardware_experiment_profiles.yaml`. Treat that file as the checklist for what must be
+recorded; do not describe any of it as measured until new sessions exist.
+
 ## 1. What runs where
 
 | Machine | Nodes | Radio address |
@@ -72,6 +76,7 @@ This implements Eq. (1) and Eq. (6) with GTSAM (`pip install gtsam`), using the 
 - **Solver.** Gauss–Newton, re-run every second when new edges have arrived.
 - **Gauge.** Each robot's first keyframe has a prior at its **start pose, measured from floor marks before the run** (`start_poses`, recorded in the run sheet). LIMO-01's prior is tight; LIMO-02's has σ = 0.10 m / 0.05 rad. This matches the simulator, where all robots start in a common frame. Never set start poses from Vicon during a run.
 - **Output.** It broadcasts `map → <robot>/odom`, stamped with the node clock (the bag's `/clock` under `use_sim_time:=true`). `map → <robot>/base_link` then follows through the bag's own `odom → base_link`; broadcasting map → base_link directly would give base_link two parents.
+- **Bag topic.** The server also publishes `/fused_poses` (JSON snapshots of the fused map poses) so the bag contains an explicit, easy-to-audit record of the fused trajectory in addition to `/tf`.
 - **Logs.** Every inter-robot edge with its residual, age and θ goes to `fusion_edges.csv`; the mean trust goes to `fusion_summary.json`.
 
 It can run live during the experiment (server) or afterwards on the recorded bag:
@@ -100,7 +105,7 @@ Run *k* of each policy then comes from block *k*: same hour, same battery state,
 On the server:
 ```bash
 ros2 bag record -s mcap -o HWS-101-FIFO_run01 /tf /tf_static /scan/limo01 /scan/limo02 /odom/limo01 \
-  /odom/limo02 /vicon/limo01/pose /vicon/limo02/pose /bacs/candidates /bacs/scheduler /bacs/received /bacs/keyframes /bacs/kf_desc /bacs/kf_request /map &
+  /odom/limo02 /vicon/limo01/pose /vicon/limo02/pose /bacs/candidates /bacs/scheduler /bacs/received /bacs/keyframes /bacs/kf_desc /bacs/kf_request /fused_poses /map &
 ros2 run bacs_scheduler bacs_receiver --ros-args -p session:=HWS-101-FIFO -p run:=1 -p port:=/dev/ttyUSB0
 python3 scripts/repro/log_fused_poses.py --ros-args -p session:=HWS-101-FIFO \
   -p out:=fused_HWS-101-FIFO_run01.csv      # live, no sim time
@@ -109,10 +114,16 @@ On each robot:
 ```bash
 ros2 run bacs_scheduler bacs_candidates --ros-args -p session:=HWS-101-FIFO -p run:=1 -p robot:=limo01 &
 ros2 run bacs_scheduler bacs_sender --ros-args -p session:=HWS-101-FIFO -p run:=1 -p policy:=FIFO \
-  -p robot:=limo01 -p address:=1 -p port:=/dev/ttyUSB0
+  -p robot:=limo01 -p address:=1 -p port:=/dev/ttyUSB0 -p trust_threshold:=0.05
 ```
 
 Start the nodes, then drive for 720 s, then stop in reverse order (senders first, so pending candidates are logged as `PENDING_AT_END`). Don't edit, trim or re-run a file after the fact. A failed run is recorded as failed in the run sheet and repeated as a new run number.
+
+For the surplus-candidate profile used to stress the duty-cycle limit, lower the keyframe
+period and motion thresholds according to `config/hardware_experiment_profiles.yaml`
+(`keyframe_period_s=1.0`, `min_motion_m=0.02`, `min_rotation_deg=2.0`, `shortlist=6`,
+`place_threshold=0.16`). The target is a surplus stream (≥60 candidates per 10 minutes) while
+holding the legal airtime budget at 0.6 s/min.
 
 Each `~/bacs_hw_logs/<session>/run_XX/` folder then holds:
 - `candidates_<robot>.csv`: one row per candidate, with final status `SENT`, `RADIO_ERROR`, `RADIO_TIMEOUT`, `REJECTED_TRUST`, `DROPPED_AGE` or `PENDING_AT_END`

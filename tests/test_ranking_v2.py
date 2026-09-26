@@ -1,137 +1,189 @@
-"""Ranking v2 (tw_now / tw_arrival / tw_arrival_sub): score properties and budgets."""
-import math
-from types import SimpleNamespace
+"""Ranking-v2 scheduler variants: trust-weighted gain and submodular packing."""
+import itertools
 
 import numpy as np
-import pandas as pd
 import pytest
 
-from bacs_sim.config import InfoGainConfig, LoRaConfig, SimConfig, TrustConfig, SchedulerConfig
-from bacs_sim.experiments import _mk
-from bacs_sim.infogain import CoverageMap
-from bacs_sim.lora import airtime_budget, time_on_air
+from bacs_sim.config import InfoGainConfig, LoRaConfig, SchedulerConfig
+from bacs_sim.infogain import CoverageMap, surrogate_info
+from bacs_sim.lora import time_on_air
 from bacs_sim.observability import PairObservability
-from bacs_sim.schedulers import (TW_POLICIES, _coverage_copy, _sub_score, schedule, theta_arrival, theta_now,
-                                 tw_info)
-from bacs_sim.simulator import precompute, run
+from bacs_sim.schedulers import _pack_submodular, arrival_trust, schedule, trust_weighted_info
+from bacs_sim.world import Constraint
 
-# The four ranking-v2 conditions (scripts/revision/ranking_v2.py BASE_CONDITIONS; gamma is irrelevant here).
-CONDITIONS = {"C0": {}, "C1": {"lora.duty_cycle": 0.005, "scheduler.window_s": 120.0},
-              "C2": {"lora.sf": 9, "scheduler.window_s": 200.0}, "C3": {"channel.loss_rate": 0.20}}
+LORA = LoRaConfig()
+ICFG = InfoGainConfig()
 
 
-def apply(cfg, cond):
-    for k, v in CONDITIONS[cond].items():
-        obj, attr = k.split(".")
-        setattr(getattr(cfg, obj), attr, v)
-    return cfg
-
-
-def ctx_for(lora=None, t_now=120.0, gamma=0.0045, p_loss=0.0):
-    icfg = InfoGainConfig()
-    return dict(t_now=t_now, gamma=gamma, p_loss=p_loss, lora=lora or LoRaConfig(), window_s=60.0,
-                trust=TrustConfig(), infogain=icfg, coverage=CoverageMap(icfg), pair_obs=PairObservability(6.0))
-
-
-def cand(i, rid_from=0, rid_to=1, t=100.0, k=0, spatial=0.9, theta_hat=0.8, nov=1.0, xy=(1.0, 1.0),
-         queue=0.0, payload=52, deg=0, loop=30.0, ctx=None):
-    c = SimpleNamespace(i=i, rid_from=rid_from, rid_to=rid_to, t_created=float(t), deferrals=k, payload_bytes=payload,
-                        theta_hat=theta_hat, _spatial=spatial, _nov=nov, _deg=deg, _loop=loop,
-                        _xy=np.array(xy, float), _queue_ahead=queue)
-    if ctx is not None:  # info_hat as the simulator sets it for TW policies (I_hat_plus)
-        from bacs_sim.infogain import surrogate_info
-        c.info_hat = surrogate_info(nov, deg, loop, ctx["infogain"]) + ctx["infogain"].w_obs * ctx["pair_obs"].score(
-            rid_from, rid_to)
+def cand(rid_to, xy, theta=0.8, payload=40, t=0.0):
+    c = Constraint(rid_from=0, rid_to=rid_to, idx_from=0, idx_to=0, z=np.zeros(3),
+                   t_created=t, payload_bytes=payload)
+    c.xy_from, c.degree_from, c.loop_len = np.asarray(xy, float), 0, 30.0
+    c.theta_hat = theta
     return c
 
 
-def test_tw_info_zero_trust_and_full_trust():
-    for info in (0.0, 0.1, 1.0, 5.0):
-        assert tw_info(0.0, info) == 0.0
-        assert tw_info(1.0, info) == pytest.approx(info)
+def ctx():
+    return dict(coverage=CoverageMap(ICFG), pair_obs=PairObservability(6.0), infogain=ICFG,
+                gamma=np.log(2) / 155.0, t_now=0.0)
 
 
-def test_tw_info_monotone_in_theta_and_info():
-    thetas, infos = np.linspace(0, 1, 21), np.linspace(0, 4, 21)
-    grid = np.array([[tw_info(t, i) for i in infos] for t in thetas])
-    assert np.all(np.diff(grid, axis=0) >= 0) and np.all(np.diff(grid[1:], axis=0)[:, 1:] > 0)
-    assert np.all(np.diff(grid, axis=1) >= 0) and np.all(np.diff(grid[1:, :], axis=1) > 0)
+def fill_info(cands, c):
+    for x in cands:
+        x.info_hat = (surrogate_info(c["coverage"].novelty(x.xy_from), x.degree_from, x.loop_len, ICFG)
+                      + ICFG.w_obs * c["pair_obs"].score(x.rid_from, x.rid_to))
 
 
-def test_arrival_trust_not_above_current_trust():
-    rng = np.random.default_rng(0)
-    for _ in range(500):
-        t_now = 60.0 * rng.integers(1, 12)
-        k = int(rng.integers(0, 12))
-        # a candidate deferred k windows was created within window (t_now/60 - k)
-        t_created = t_now - 60.0 * k + rng.uniform(0, 60.0) if k else t_now + rng.uniform(0, 60.0)
-        ctx = ctx_for(t_now=t_now, gamma=rng.uniform(0.001, 0.05), p_loss=rng.uniform(0, 0.3))
-        c = cand(0, t=t_created, k=k, spatial=rng.uniform(0, 1), queue=rng.uniform(0, 0.3))
-        assert theta_arrival(c, ctx) <= theta_now(c, ctx) + 1e-15
+def test_itw_zero_when_theta_zero():
+    for info in (0.0, 0.3, 1.0, 1.6):
+        assert trust_weighted_info(info, 0.0) == 0.0
 
 
-def test_submodular_update_lowers_same_pair_score():
-    ctx = ctx_for()
-    a = cand(0, rid_from=0, rid_to=1, xy=(1.0, 1.0))
-    b = cand(1, rid_from=0, rid_to=1, xy=(1.2, 1.1))      # same pair, overlapping support
-    far = cand(2, rid_from=0, rid_to=2, xy=(9.0, 7.0))    # other pair, disjoint support
-    cov = _coverage_copy(ctx)
-    th = theta_arrival(b, ctx)
-    before_b, before_far = _sub_score(b, ctx, cov, {}, th), _sub_score(far, ctx, cov, {}, th)
-    cov.mark(a._xy)                                        # a selected
-    extra = {ctx["pair_obs"]._key(0, 1): 1}
-    assert _sub_score(b, ctx, cov, extra, th) < before_b
-    assert _sub_score(far, ctx, cov, extra, th) == pytest.approx(before_far)
-    assert ctx["coverage"].cells == set()                  # the real coverage map is untouched
+def test_itw_equals_info_at_full_trust():
+    for info in (0.0, 0.3, 1.0, 1.6):
+        assert trust_weighted_info(info, 1.0) == pytest.approx(info)
 
 
-def test_submodular_changes_selection_order():
-    ctx = ctx_for()
-    a = cand(0, 0, 1, xy=(1.0, 1.0), nov=1.0, ctx=ctx)
-    b = cand(1, 0, 1, xy=(1.0, 1.0), nov=1.0, ctx=ctx)     # duplicate of a
-    c = cand(2, 0, 2, xy=(9.0, 7.0), nov=0.9, ctx=ctx)     # slightly less novel, other pair
-    budget = 2.5 * time_on_air(52, ctx["lora"])
-    cfg = lambda p: SchedulerConfig(policy=p)              # noqa: E731
-    plain = [x.i for x in schedule([a, b, c], budget, cfg("tw_arrival"), ctx["lora"], None, ctx=ctx)]
-    sub = [x.i for x in schedule([a, b, c], budget, cfg("tw_arrival_sub"), ctx["lora"], None, ctx=ctx)]
-    assert plain == [0, 1] and sub == [0, 2]
+def test_itw_monotone_in_theta_and_info():
+    grid = np.linspace(0.0, 1.0, 21)
+    infos = np.linspace(0.0, 1.6, 21)
+    for info in infos[1:]:
+        vals = [trust_weighted_info(info, th) for th in grid]
+        assert all(b > a for a, b in zip(vals, vals[1:]))
+    for th in grid[1:]:
+        vals = [trust_weighted_info(i, th) for i in infos]
+        assert all(b > a for a, b in zip(vals, vals[1:]))
 
 
-@pytest.mark.parametrize("cond", list(CONDITIONS))
-@pytest.mark.parametrize("policy", TW_POLICIES + ["bacs_gated", "random", "fifo"])
-def test_scheduled_airtime_within_budget(cond, policy):
-    sim = apply(SimConfig(), cond)
-    lora, window = sim.lora, sim.scheduler.window_s
-    ctx = ctx_for(lora=lora)
+def test_submodular_update_lowers_same_pair_scores():
+    c = ctx()
+    pair_a = [cand(1, (0.0, 0.0)), cand(1, (0.3, 0.2))]   # same pair, overlapping support
+    other = cand(2, (40.0, 40.0))                           # different pair, far away
+    fill_info(pair_a + [other], c)
+    before = {id(x): trust_weighted_info(x.info_hat, x.theta_hat) for x in pair_a + [other]}
+
+    budget = time_on_air(40, LORA) * 1.5                    # room for exactly one pick
+    chosen = _pack_submodular(pair_a + [other], budget, LORA, c)
+    assert len(chosen) == 1 and chosen[0].rid_to == 1
+
+    # Rescore after the provisional update the loop applies.
+    c2 = ctx()
+    c2["pair_obs"].mark(0, 1)
+    c2["coverage"].mark(chosen[0].xy_from)
+    rest = [x for x in pair_a if x is not chosen[0]]
+    fill_info(rest + [other], c2)
+    for x in rest:
+        assert trust_weighted_info(x.info_hat, x.theta_hat) < before[id(x)]
+    assert trust_weighted_info(other.info_hat, other.theta_hat) == pytest.approx(before[id(other)])
+    # The live state passed in ctx is left untouched.
+    assert c["pair_obs"].count(0, 1) == 0 and not c["coverage"].cells
+
+
+def test_submodular_changes_order_vs_static_ranking():
+    # Two near-duplicate candidates on one pair and a lower-trust one on
+    # another pair elsewhere: the static rank takes both duplicates, the
+    # submodular loop diversifies.
+    c = ctx()
+    dup = [cand(1, (0.0, 0.0), theta=0.9), cand(1, (0.1, 0.0), theta=0.9)]
+    fresh = cand(2, (40.0, 40.0), theta=0.6)
+    fill_info(dup + [fresh], c)
+    budget = time_on_air(40, LORA) * 2.5
+    static = schedule(dup + [fresh], budget, SchedulerConfig(policy="plus_tw"), LORA, None, ctx=c)
+    assert all(x is not fresh for x in static)
+    sub = schedule(dup + [fresh], budget, SchedulerConfig(policy="plus_tw_sub"), LORA, None, ctx=c)
+    assert any(x is fresh for x in sub) and len(sub) == 2
+
+
+@pytest.mark.parametrize("policy", ["bacs_tw", "plus_tw", "plus_tw_sub", "plus_tw_sub_relgate",
+                                    "plus_tw_arr", "plus_tw_arr_sub"])
+def test_budget_respected(policy):
     rng = np.random.default_rng(1)
-    for n_robots in (2, 3, 4, 5):
-        budget = airtime_budget(window, lora, n_robots)
-        pool = [cand(i, rid_to=int(rng.integers(1, 5)), t=rng.uniform(0, 120), k=int(rng.integers(0, 3)),
-                     spatial=rng.uniform(0, 1), theta_hat=rng.uniform(0, 1), nov=rng.uniform(0, 1),
-                     xy=rng.uniform(0, 10, 2), payload=int(rng.integers(52, 68)), ctx=ctx) for i in range(40)]
-        chosen = schedule(pool, budget, SchedulerConfig(policy=policy), lora, np.random.default_rng(0), ctx=ctx)
-        assert sum(time_on_air(c.payload_bytes, lora) for c in chosen) <= budget + 1e-12
+    c = ctx()
+    cands = [cand(int(rng.integers(1, 4)), rng.uniform(0, 14, 2), theta=float(rng.uniform(0, 1)),
+                  payload=int(rng.integers(28, 70)), t=float(i)) for i in range(60)]
+    fill_info(cands, c)
+    for budget in (0.05, 0.2, 0.6, 3.0):
+        cfg = SchedulerConfig(policy=policy, rel_gate=0.5)
+        chosen = schedule(cands, budget, cfg, LORA, rng, ctx=c)
+        assert sum(time_on_air(x.payload_bytes, LORA) for x in chosen) <= budget + 1e-12
+        assert len({id(x) for x in chosen}) == len(chosen)
 
 
-@pytest.mark.parametrize("cond", list(CONDITIONS))
-def test_simulated_windows_respect_duty_cycle(cond):
-    """Per robot and window, first-attempt airtime of what was scheduled <= delta*W/N,
-    and every condition actually transmits.
+def test_gates():
+    c = ctx()
+    cands = [cand(1, (i, 0.0), theta=th) for i, th in enumerate((0.01, 0.2, 0.4, 0.8))]
+    fill_info(cands, c)
+    big = 10.0
+    abs_gated = schedule(cands, big, SchedulerConfig(policy="plus_tw"), LORA, None, ctx=c)
+    assert {x.theta_hat for x in abs_gated} == {0.2, 0.4, 0.8}
+    # median 0.3 -> threshold 0.15 at g=0.5
+    rel = schedule(cands, big, SchedulerConfig(policy="plus_tw_sub_relgate", rel_gate=0.5), LORA, None, ctx=c)
+    assert {x.theta_hat for x in rel} == {0.2, 0.4, 0.8}
+    rel = schedule(cands, big, SchedulerConfig(policy="plus_tw_sub_relgate", rel_gate=2.0), LORA, None, ctx=c)
+    assert {x.theta_hat for x in rel} == {0.8}
 
-    Retransmissions (C3) are not budgeted by the existing channel model; their
-    extra airtime is measured in the ranking-v2 report, not asserted here.
-    """
-    for policy in ("tw_arrival_sub", "fifo"):
-        c = _mk(seed=1, n_robots=3)
-        c.world.session_s = 240.0
-        pre = precompute(c)
-        c.scheduler.policy = policy
-        c.trust.gamma_rule = "deferral_derived"
-        apply(c, cond)
-        r = run(c, precomputed=pre, collect_tx=True, iexact_fraction=0.0)
-        log = pd.DataFrame(r.extras["tx_log"])
-        assert len(log)
-        per_window = log.groupby(["robot", "t_sched"]).T_air.sum()
-        assert (per_window <= airtime_budget(c.scheduler.window_s, c.lora, 3) + 1e-12).all()
-        if cond != "C3":
-            assert (log.attempts == 1).all()
+
+def test_submodular_first_pick_matches_static():
+    rng = np.random.default_rng(3)
+    c = ctx()
+    cands = [cand(int(rng.integers(1, 4)), rng.uniform(0, 14, 2), theta=float(rng.uniform(0.1, 1)))
+             for _ in range(30)]
+    fill_info(cands, c)
+    budget = time_on_air(40, LORA) * 1.2
+    a = schedule(cands, budget, SchedulerConfig(policy="plus_tw"), LORA, None, ctx=c)
+    b = schedule(cands, budget, SchedulerConfig(policy="plus_tw_sub"), LORA, None, ctx=c)
+    assert [id(x) for x in a] == [id(x) for x in b]
+
+
+def test_arrival_trust_discounts_accumulated_age():
+    g = np.log(2) / 155.0
+    assert arrival_trust(0.8, 0.0, g) == pytest.approx(0.8)
+    assert arrival_trust(0.8, 155.0, g) == pytest.approx(0.4)
+    assert arrival_trust(0.8, -5.0, g) == pytest.approx(0.8)      # not yet created: no discount
+    ages = np.linspace(0, 600, 13)
+    vals = [arrival_trust(0.8, a, g) for a in ages]
+    assert all(b < a for a, b in zip(vals, vals[1:]))
+
+
+def test_arrival_ranking_demotes_old_candidates():
+    # Same information and theta_hat; the old one has waited 300 s. TW ranks
+    # by input order (tie), TW-Arrival must prefer the fresh one.
+    c = ctx()
+    c["t_now"] = 600.0
+    old = cand(1, (0.0, 0.0), theta=0.8, t=300.0)
+    fresh = cand(2, (40.0, 40.0), theta=0.8, t=600.0)
+    fill_info([old, fresh], c)
+    budget = time_on_air(40, LORA) * 1.2
+    tw = schedule([old, fresh], budget, SchedulerConfig(policy="plus_tw"), LORA, None, ctx=c)
+    arr = schedule([old, fresh], budget, SchedulerConfig(policy="plus_tw_arr"), LORA, None, ctx=c)
+    assert tw[0] is old and arr[0] is fresh
+    sub = schedule([old, fresh], budget, SchedulerConfig(policy="plus_tw_arr_sub"), LORA, None, ctx=c)
+    assert sub[0] is fresh
+
+
+def test_arrival_equals_tw_when_nothing_has_aged():
+    rng = np.random.default_rng(5)
+    c = ctx()
+    cands = [cand(int(rng.integers(1, 4)), rng.uniform(0, 14, 2), theta=float(rng.uniform(0.1, 1)),
+                  t=float(rng.uniform(0, 60))) for _ in range(40)]
+    fill_info(cands, c)
+    for budget in (0.1, 0.5):
+        a = schedule(cands, budget, SchedulerConfig(policy="plus_tw"), LORA, None, ctx=c)
+        b = schedule(cands, budget, SchedulerConfig(policy="plus_tw_arr"), LORA, None, ctx=c)
+        assert [id(x) for x in a] == [id(x) for x in b]
+
+
+def test_diagnostics_do_not_change_results():
+    from bacs_sim.experiments import s8_config
+    from bacs_sim.simulator import precompute, run
+    cfg = s8_config("plus_tw_arr_sub", seed=1, n_robots=3, session_s=180.0)
+    pre = precompute(cfg)
+    a = run(cfg, precomputed=pre)
+    b = run(cfg, precomputed=pre, collect_diag=True)
+    assert (a.align_rmse, a.pose_rmse, a.n_delivered) == (b.align_rmse, b.pose_rmse, b.n_delivered)
+    rows = b.extras["diag"]
+    assert len(rows) == b.n_sent and sum(r["delivered"] for r in rows) == b.n_delivered
+    for r in rows:
+        if r["delivered"]:
+            assert r["age_arrival"] >= r["age_send"] >= 0
+            assert 0 <= r["retention"] <= 1 + 1e-9
