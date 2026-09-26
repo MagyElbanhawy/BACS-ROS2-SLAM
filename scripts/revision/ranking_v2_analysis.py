@@ -152,6 +152,38 @@ def mechanism(tx: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def outlier_mechanism(tx: pd.DataFrame, raw: pd.DataFrame) -> tuple[pd.DataFrame, float]:
+    """How much trust-weighted evidence the delivered outliers carry, per policy.
+
+    Returns the per-policy table and the within-cell Spearman correlation between a
+    run's outlier weight share (sum of server trust on outliers / sum on all
+    delivered constraints) and its map-alignment RMSE, both centred on the
+    (seed, N) cell mean so that world difficulty cancels."""
+    t = tx.assign(w_out=tx.theta_arrival * tx.is_outlier)
+    per = t.groupby(["policy", "seed", "n_robots"]).agg(w_out=("w_out", "sum"), w_all=("theta_arrival", "sum"),
+                                                        n_out=("is_outlier", "sum")).reset_index()
+    per["outlier_weight_share"] = per.w_out / per.w_all
+    m = per.merge(raw, on=["policy", "seed", "n_robots"])
+    g = m.groupby("policy").agg(outliers_transmitted=("n_out", "sum"), outlier_theta_sum=("w_out", "sum"),
+                                outlier_weight_share=("outlier_weight_share", "mean"),
+                                align_mean=("align_rmse", "mean"), align_median=("align_rmse", "median"),
+                                catastrophic_share=("align_rmse", lambda a: float((a > 0.5).mean()))).loc[POLICIES]
+    g["server_theta_per_outlier"] = g.outlier_theta_sum / g.outliers_transmitted
+    g = g.drop(columns="outlier_theta_sum").reset_index()
+    x = m.outlier_weight_share - m.groupby(["seed", "n_robots"]).outlier_weight_share.transform("mean")
+    y = m.align_rmse - m.groupby(["seed", "n_robots"]).align_rmse.transform("mean")
+    return g, float(st.spearmanr(x, y)[0])
+
+
+def fmt_outliers(g: pd.DataFrame, rho: float) -> str:
+    rows = [[LABEL[r.policy], int(r.outliers_transmitted), f"{r.server_theta_per_outlier:.3f}",
+             f"{r.outlier_weight_share:.3f}", f"{r.align_mean:.3f}", f"{r.align_median:.3f}",
+             f"{100 * r.catastrophic_share:.0f} %"] for r in g.itertuples()]
+    return (table(["policy", "outliers transmitted", "server θ per outlier", "outlier share of trust weight",
+                   "align mean (m)", "align median (m)", "runs > 0.5 m"], rows)
+            + f"\n\nWithin-cell Spearman ρ(outlier share of trust weight, alignment RMSE) = {rho:.2f} (1200 runs).")
+
+
 # ------------------------------------------------------------------ figures
 def _style(ax):
     ax.grid(axis="y", color="#e2e2e0", zorder=0)
@@ -305,6 +337,8 @@ def main():
         t.to_csv(d / "test_paired_tests.csv", index=False, lineterminator="\n")
         m = mechanism(tx)
         m.to_csv(d / "mechanism.csv", index=False, lineterminator="\n")
+        om, rho = outlier_mechanism(tx, raw)
+        om.to_csv(d / "outlier_mechanism.csv", index=False, lineterminator="\n")
         summaries[c] = s
         for r in t[(t.policy == chosen) & (t.versus == "random")].itertuples():
             trend_rows.append({"condition": c, "n_robots": r.n_robots, "chosen": chosen,
@@ -318,7 +352,7 @@ def main():
                         f"{fmt_extra(s)}\n\n**Paired tests on map-alignment RMSE** (Δ and diff negative = first "
                         f"policy lower; won = pairs where it is lower; Holm within each family, 5 tests per "
                         f"comparison)\n\n{fmt_tests(t)}\n\n**Mechanism (all transmitted constraints, pooled over N)**"
-                        f"\n\n{fmt_mech(m)}\n")
+                        f"\n\n{fmt_mech(m)}\n\n**Outlier mechanism** (`outlier_mechanism.csv`)\n\n{fmt_outliers(om, rho)}\n")
     trend = pd.DataFrame(trend_rows)
     trend.to_csv(OUT / "stress_trend.csv", index=False, lineterminator="\n")
     if "C0" in summaries:

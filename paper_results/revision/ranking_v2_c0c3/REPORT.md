@@ -19,6 +19,49 @@ window, expiry and greedy packing, by I_tw / T_air, where I_tw = ½ log(1 + θ (
 | `tw_arrival` | spatial term · e^(−γ A_c), A_c = k_c W + queue ahead + T_air + retry |
 | `tw_arrival_sub` | as `tw_arrival`, plus diminishing returns inside the greedy loop |
 
+## Findings
+
+**1. The primary hypothesis is rejected in every condition.** `tw_now` (chosen on DEV) has a
+*higher* mean map-alignment RMSE than Random: +32 % (C0), +47 % (C1), +31 % (C2), +28 % (C3),
+pooled over 120 seed-team pairs, Holm p = 0.012, < 1e-4, < 1e-4 and 0.005. It is also 35–51 % worse
+than BACS+ (0.30, 6) (Holm p < 1e-4 in all conditions). Against FIFO it is no better in C0, C1 and C3,
+and worse in C2. The other two TW variants behave the same way.
+
+**2. Ablation.** Adding trust weighting to the information-density ranking (`info_only` → `tw_now`)
+raises the alignment error by 23–38 % in every condition (Holm p ≤ 0.0006). Arrival-age trust
+(`tw_now` → `tw_arrival`) adds another 1–4 %, significant only in C0 and C3. Within-window
+diminishing returns (`tw_arrival` → `tw_arrival_sub`) changes nothing (Holm p ≥ 0.39).
+
+**3. Ranking of the existing policies.** BACS+ (0.30, 6) has the lowest mean alignment RMSE in all
+four conditions (0.204 / 0.305 / 0.400 / 0.204 m). BACS, Info-only and Random form the next group
+(0.22–0.44 m depending on condition). FIFO, LIFO, Trust-only and the three TW variants are worst.
+
+**4. Why trust weighting hurts: fresh outliers.** The TW variants achieve what they optimise.
+Mean server trust at arrival rises from about 0.42 (BACS) to 0.54–0.56, arrival age falls from about
+107 s to 76–83 s, and C0 sees fewer outliers transmitted. But:
+
+- **The transmitter cannot tell outliers from inliers.** Its predicted spatial term is about 0.99
+  for every policy, because the confidence blend pushes it towards 1 as the map ages. So predicted
+  trust varies only through exp(−γ·age), and TW reduces to "prefer fresh constraints", with
+  information as a tie-breaker.
+- **The server's age decay was acting as an outlier guard.** Under BACS, BACS+ and Random, an
+  outlier arrives old and gets server trust of about 0.013–0.023. Under TW (and LIFO) it arrives
+  fresh and gets about 0.19–0.21 in C0 (0.37–0.39 in C1 and C2). The outliers' share of the
+  trust-weighted evidence therefore rises about 8× (see the outlier-mechanism tables below).
+- **That share predicts the error.** Within each (seed, N) cell, a run's outlier share of trust
+  weight correlates with its alignment RMSE (Spearman 0.57–0.69 across conditions).
+- **The mean is driven by failures.** TW's *median* alignment error is close to BACS's, but 17–50 %
+  of TW runs exceed 0.5 m, against 1–20 % for BACS+.
+
+In short, "expected effective information at the server" assumes the transmitter's θ̂ predicts the
+server's trust. In this simulator θ̂ carries no outlier information, so weighting by it only buys
+freshness. Freshness removes the implicit protection that staleness gave against wrong data
+associations.
+
+**5. Why Random does as well as BACS.** Random neither favours fresh constraints (so outliers still
+arrive stale and down-weighted) nor starves any age class. Its median arrival age is between FIFO's
+and the TW variants'. Its outlier share of trust weight stays at the BACS level.
+
 ## DEV decision (seeds 0–9, C0)
 
 
@@ -184,6 +227,23 @@ their creation time (zero deferral). C0 keeps the S8 value 155 s.
 | TW-arrival | 3840 | 0.704 | 0.538 | +0.166 | +0.140 | +0.567 | 0.890 | 5.33 | 100.6 | 83.6 | 17.5 | 0.899 | 0.061 |
 | TW-arrival-sub | 3840 | 0.706 | 0.540 | +0.165 | +0.138 | +0.573 | 0.891 | 5.28 | 99.8 | 83.2 | 18.0 | 0.906 | 0.064 |
 
+**Outlier mechanism** (`outlier_mechanism.csv`)
+
+| policy | outliers transmitted | server θ per outlier | outlier share of trust weight | align mean (m) | align median (m) | runs > 0.5 m |
+|---|---|---|---|---|---|---|
+| FIFO | 337 | 0.014 | 0.003 | 0.306 | 0.271 | 12 % |
+| LIFO | 280 | 0.190 | 0.017 | 0.284 | 0.235 | 8 % |
+| Random | 289 | 0.023 | 0.005 | 0.223 | 0.200 | 2 % |
+| Trust-only | 241 | 0.171 | 0.024 | 0.320 | 0.220 | 18 % |
+| Info-only | 340 | 0.013 | 0.003 | 0.223 | 0.196 | 3 % |
+| BACS | 331 | 0.013 | 0.003 | 0.219 | 0.194 | 2 % |
+| BACS+ (0.30, 6) | 322 | 0.014 | 0.003 | 0.204 | 0.181 | 3 % |
+| TW-now | 238 | 0.193 | 0.024 | 0.294 | 0.204 | 18 % |
+| TW-arrival | 236 | 0.214 | 0.026 | 0.306 | 0.217 | 21 % |
+| TW-arrival-sub | 244 | 0.208 | 0.026 | 0.302 | 0.212 | 21 % |
+
+Within-cell Spearman ρ(outlier share of trust weight, alignment RMSE) = 0.61 (1200 runs).
+
 ### C1
 
 **Map-alignment RMSE (m), mean ± SD [95 % t-CI]**
@@ -265,6 +325,23 @@ their creation time (zero deferral). C0 keeps the S8 value 155 s.
 | TW-now | 1920 | 0.679 | 0.560 | +0.120 | +0.091 | +0.373 | 0.900 | 6.53 | 71.8 | 35.1 | 38.1 | 0.852 | 0.103 |
 | TW-arrival | 1920 | 0.683 | 0.530 | +0.153 | +0.127 | +0.390 | 0.896 | 6.51 | 70.8 | 44.5 | 27.8 | 0.863 | 0.096 |
 | TW-arrival-sub | 1920 | 0.684 | 0.527 | +0.157 | +0.133 | +0.389 | 0.898 | 6.44 | 70.5 | 45.3 | 28.3 | 0.864 | 0.094 |
+
+**Outlier mechanism** (`outlier_mechanism.csv`)
+
+| policy | outliers transmitted | server θ per outlier | outlier share of trust weight | align mean (m) | align median (m) | runs > 0.5 m |
+|---|---|---|---|---|---|---|
+| FIFO | 113 | 0.025 | 0.004 | 0.392 | 0.341 | 19 % |
+| LIFO | 178 | 0.413 | 0.067 | 0.453 | 0.343 | 30 % |
+| Random | 128 | 0.032 | 0.016 | 0.314 | 0.284 | 8 % |
+| Trust-only | 176 | 0.292 | 0.064 | 0.463 | 0.336 | 33 % |
+| Info-only | 155 | 0.022 | 0.006 | 0.333 | 0.279 | 8 % |
+| BACS | 147 | 0.023 | 0.006 | 0.336 | 0.279 | 10 % |
+| BACS+ (0.30, 6) | 148 | 0.020 | 0.006 | 0.305 | 0.265 | 5 % |
+| TW-now | 198 | 0.368 | 0.073 | 0.460 | 0.335 | 33 % |
+| TW-arrival | 184 | 0.389 | 0.074 | 0.466 | 0.341 | 34 % |
+| TW-arrival-sub | 181 | 0.393 | 0.077 | 0.458 | 0.332 | 33 % |
+
+Within-cell Spearman ρ(outlier share of trust weight, alignment RMSE) = 0.69 (1200 runs).
 
 ### C2
 
@@ -348,6 +425,23 @@ their creation time (zero deferral). C0 keeps the S8 value 155 s.
 | TW-arrival | 1883 | 0.611 | 0.470 | +0.141 | +0.118 | +0.308 | 0.886 | 6.84 | 113.8 | 67.4 | 53.5 | 0.860 | 0.121 |
 | TW-arrival-sub | 1869 | 0.617 | 0.459 | +0.158 | +0.133 | +0.329 | 0.881 | 6.67 | 112.7 | 69.7 | 54.9 | 0.823 | 0.128 |
 
+**Outlier mechanism** (`outlier_mechanism.csv`)
+
+| policy | outliers transmitted | server θ per outlier | outlier share of trust weight | align mean (m) | align median (m) | runs > 0.5 m |
+|---|---|---|---|---|---|---|
+| FIFO | 188 | 0.042 | 0.016 | 0.450 | 0.361 | 31 % |
+| LIFO | 239 | 0.522 | 0.122 | 0.648 | 0.516 | 51 % |
+| Random | 119 | 0.108 | 0.024 | 0.413 | 0.321 | 20 % |
+| Trust-only | 235 | 0.315 | 0.119 | 0.511 | 0.429 | 43 % |
+| Info-only | 217 | 0.043 | 0.023 | 0.440 | 0.336 | 26 % |
+| BACS | 208 | 0.046 | 0.022 | 0.437 | 0.340 | 25 % |
+| BACS+ (0.30, 6) | 212 | 0.027 | 0.010 | 0.400 | 0.342 | 20 % |
+| TW-now | 234 | 0.386 | 0.122 | 0.541 | 0.480 | 48 % |
+| TW-arrival | 228 | 0.396 | 0.129 | 0.534 | 0.460 | 48 % |
+| TW-arrival-sub | 239 | 0.377 | 0.139 | 0.530 | 0.496 | 50 % |
+
+Within-cell Spearman ρ(outlier share of trust weight, alignment RMSE) = 0.57 (1200 runs).
+
 ### C3
 
 **Map-alignment RMSE (m), mean ± SD [95 % t-CI]**
@@ -429,6 +523,23 @@ their creation time (zero deferral). C0 keeps the S8 value 155 s.
 | TW-now | 3840 | 0.655 | 0.516 | +0.139 | +0.110 | +0.559 | 0.868 | 5.23 | 91.4 | 67.5 | 24.5 | 0.899 | 0.064 |
 | TW-arrival | 3840 | 0.654 | 0.499 | +0.154 | +0.128 | +0.560 | 0.868 | 5.25 | 92.2 | 74.8 | 17.9 | 0.897 | 0.061 |
 | TW-arrival-sub | 3840 | 0.654 | 0.499 | +0.154 | +0.127 | +0.569 | 0.868 | 5.21 | 91.9 | 75.0 | 18.3 | 0.904 | 0.062 |
+
+**Outlier mechanism** (`outlier_mechanism.csv`)
+
+| policy | outliers transmitted | server θ per outlier | outlier share of trust weight | align mean (m) | align median (m) | runs > 0.5 m |
+|---|---|---|---|---|---|---|
+| FIFO | 314 | 0.016 | 0.004 | 0.294 | 0.251 | 9 % |
+| LIFO | 247 | 0.193 | 0.016 | 0.283 | 0.232 | 10 % |
+| Random | 293 | 0.019 | 0.004 | 0.236 | 0.200 | 4 % |
+| Trust-only | 250 | 0.180 | 0.030 | 0.327 | 0.217 | 20 % |
+| Info-only | 305 | 0.013 | 0.003 | 0.221 | 0.198 | 3 % |
+| BACS | 296 | 0.013 | 0.003 | 0.219 | 0.192 | 2 % |
+| BACS+ (0.30, 6) | 289 | 0.013 | 0.003 | 0.204 | 0.188 | 1 % |
+| TW-now | 247 | 0.186 | 0.024 | 0.302 | 0.214 | 18 % |
+| TW-arrival | 234 | 0.214 | 0.027 | 0.309 | 0.217 | 20 % |
+| TW-arrival-sub | 240 | 0.209 | 0.027 | 0.307 | 0.211 | 20 % |
+
+Within-cell Spearman ρ(outlier share of trust weight, alignment RMSE) = 0.63 (1200 runs).
 
 
 ## Runtime
