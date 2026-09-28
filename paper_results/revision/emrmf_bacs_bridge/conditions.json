@@ -1,0 +1,29 @@
+{
+  "source": "Reconstructed from the current checkout because paper_results/revision/ranking_v2_c0c3/conditions.json is absent.",
+  "conditions": {
+    "C0": {
+      "label": "nominal",
+      "channel.loss_model": "independent",
+      "channel.loss_rate": 0.0,
+      "channel.extra_delay_s": 0.0
+    },
+    "C1": {
+      "label": "fixed_delay_0.2s",
+      "channel.loss_model": "independent",
+      "channel.loss_rate": 0.0,
+      "channel.extra_delay_s": 0.2
+    },
+    "C2": {
+      "label": "independent_loss_10pct",
+      "channel.loss_model": "independent",
+      "channel.loss_rate": 0.1,
+      "channel.extra_delay_s": 0.0
+    },
+    "C3": {
+      "label": "burst_loss_30pct_plus_delay",
+      "channel.loss_model": "burst",
+      "channel.loss_rate": 0.3,
+      "channel.extra_delay_s": 0.2
+    }
+  }
+}

@@ -253,6 +253,23 @@ def run(cfg: SimConfig, precomputed=None, collect_graph: bool = False) -> RunRes
         gamma_final=float(gamma_ctl.value),
         dt_pred_bias=float(np.mean(dt_errors)) if dt_errors else float("nan"),
     )
+    accepted = [c for c in delivered if c.theta > cfg.trust.accept_threshold]
+    transmitted_outliers = [c for c in delivered if c.is_outlier]
+    rejected_candidates = [
+        c for lst in cands.values() for c in lst
+        if c.attempts == 0 or (c.delivered and c.theta <= cfg.trust.accept_threshold)
+    ]
+    res.extras.update({
+        "n_accepted": len(accepted),
+        "n_rejected": len(delivered) - len(accepted),
+        "n_outliers_delivered": len(transmitted_outliers),
+        "n_outliers_rejected": sum(
+            1 for c in rejected_candidates if c.is_outlier
+        ),
+        "n_inliers_rejected": sum(
+            1 for c in rejected_candidates if not c.is_outlier
+        ),
+    })
     if collect_graph:
         # Exposed for the S7 surrogate-validation experiment, which needs the
         # converged graph, its Hessian, and the delivered constraints to compute

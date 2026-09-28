@@ -7,3 +7,7 @@ BACS_v10_raw.zip
 DataProcessTools4SLAM/
 BACS_v10_raw/
 hardware/validation/*.json
+ros2_ws/build/
+ros2_ws/install/
+ros2_ws/log/
+*.rar

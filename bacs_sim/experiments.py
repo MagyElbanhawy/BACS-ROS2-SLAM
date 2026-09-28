@@ -537,6 +537,33 @@ def emrmf_baseline() -> SimConfig:
     return c
 
 
+def emrmf_reference_arm() -> SimConfig:
+    """EMRMF reference control arm for bridge experiments: FIFO transmission ordering,
+    original published drift-derived decay coefficient (Eq. 16), no knapsack,
+    no trust pre-gating, no observability term."""
+    c = SimConfig()
+    c.scheduler.policy = "emrmf_reference"
+    c.trust.gamma_rule = "derived"
+    c.scheduler.use_observability = False
+    c.scheduler.trust_gate = 0.0
+    return c
+
+
+def bacs_plus_frozen_arm() -> SimConfig:
+    """Frozen BACS+ treatment arm (plus_0.30_6) for bridge experiments:
+    gated trust pre-filtering (gate=0.05), utility-density knapsack ranking,
+    deferral-derived decay coefficient, observability term (w_obs=0.30, obs_ref=6.0)."""
+    c = SimConfig()
+    c.scheduler.policy = "bacs_plus"
+    c.trust.gamma_rule = "deferral_derived"
+    c.infogain.w_obs = 0.30
+    c.infogain.obs_ref = 6.0
+    c.scheduler.use_observability = True
+    c.scheduler.trust_gate = 0.05
+    return c
+
+
+
 def progression(seeds=range(5)):
     """Research progression: EMRMF-original -> compliant FIFO -> BACS -> BACS+.
 

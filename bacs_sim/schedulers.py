@@ -10,7 +10,7 @@ import numpy as np
 from .config import SchedulerConfig
 from .lora import time_on_air
 
-POLICIES = ["send_all", "fifo", "random", "greedy_trust", "greedy_info",
+POLICIES = ["send_all", "fifo", "emrmf_reference", "random", "greedy_trust", "greedy_info",
             "bacs", "bacs_gated", "bacs_plus"]
 
 
@@ -43,7 +43,7 @@ def schedule(cands, budget, cfg: SchedulerConfig, lora, rng: np.random.Generator
     if cfg.unlimited_budget or cfg.policy == "send_all":
         return list(cands)
 
-    if cfg.policy == "fifo":
+    if cfg.policy in ("fifo", "emrmf_reference"):
         # The parent framework's behaviour: oldest first, which is precisely the
         # ordering that maximises the temporal penalty on what gets sent.
         return _pack_by_key(cands, lambda c: -c.t_created, budget, lora)
