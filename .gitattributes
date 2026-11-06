@@ -1,0 +1,4 @@
+*.db3 filter=lfs diff=lfs merge=lfs -text
+*.mcap filter=lfs diff=lfs merge=lfs -text
+hardware/raw/** -text
+hardware/raw/**/vicon_ground_truth_*.csv filter=lfs diff=lfs merge=lfs -text

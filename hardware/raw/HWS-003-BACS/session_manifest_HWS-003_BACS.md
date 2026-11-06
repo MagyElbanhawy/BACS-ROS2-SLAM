@@ -1,0 +1,11 @@
+# Session Manifest: HWS-003-BACS
+- **Session ID**: HWS-003-BACS
+- **Robot Count**: 2 physical robots (LIMO-01, LIMO-02)
+- **Scheduling Policy**: BACS
+- **Recording Date**: 2026-07-15
+- **ROS 2 Version**: Humble Hawksbill
+- **Radio Configuration**: REYAX RYLR998, 868 MHz, SF7, BW 125 kHz, CR 4/5, 1% Duty Cycle
+- **Raw Robot Bags**: `./HWS-003-BACS_20260715_101342_db3/HWS-003-BACS_20260715_101342_db3.db3` (~1.2 GiB)
+- **LoRa Logs**: Historical raw serial logs were not preserved for this specific session.
+- **Vicon Recording**: Embedded directly in the ROS 2 bag (`/vicon/limo01/pose`, `/vicon/limo02/pose`).
+- **Hardware Configuration**: Original scheduler config (preserved exactly as run).
