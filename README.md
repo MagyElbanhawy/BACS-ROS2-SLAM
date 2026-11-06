@@ -41,3 +41,12 @@ python -m pytest -q
 ```
 
 Or run `python scripts/reproduce_all.py`. See [REPRODUCIBILITY_REPORT.md](REPRODUCIBILITY_REPORT.md) for result status and [PAPER_TRACEABILITY.md](PAPER_TRACEABILITY.md) for the claim-to-evidence chain.
+# BACS-ROS2-SLAM
+
+**Hardware Testbed Location:** Robotics Laboratory, New Mansoura University, New Mansoura City, E
+
+gypt.  
+
+
+
+

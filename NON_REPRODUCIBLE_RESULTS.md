@@ -13,3 +13,12 @@ To ensure absolute academic integrity and transparency, this document details th
 
 ## 3. Future Physical Validation
 Upcoming physical sessions will include strict NTP synchronization, raw serial logging via a dedicated failsafe script, and visual media to fully satisfy all reproducibility requirements.
+## 4. Clarification on `.db3` vs `.mcap` Formats
+The repository contains both `.db3` (SQLite) and `.mcap` formats for historical sessions. 
+- **Primary Source of Truth:** The `.db3` files are the **original, unaltered hardware recordings**. All reproducibility claims, timestamp verifications, and metric calculations in this manuscript are based strictly on the `.db3` files.
+- **Secondary Conversion:** The `.mcap` files were generated later for archival efficiency. Minor differences in logical hashes or timestamp normalization are expected artifacts of the ROS 2 format conversion process and do not reflect alterations to the core sensor data. Reviewers should rely exclusively on the `.db3` files for verification.
+## 5. Statistical Analysis Clarification
+Historical FIFO and BACS+ sessions were recorded independently. Therefore, statistical comparisons between policies treat the runs as **independent samples** (e.g., independent two-sample t-tests or Mann-Whitney U tests), not as paired observations. Any prior references to "paired" runs in early drafts have been corrected to reflect this independent experimental design.
+
+
+
