@@ -1,0 +1,9 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+venv/
+.venv/
+BACS_v10_raw.zip
+DataProcessTools4SLAM/
+BACS_v10_raw/
+hardware/validation/*.json

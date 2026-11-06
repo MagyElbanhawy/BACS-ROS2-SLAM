@@ -1,0 +1,7 @@
+session,robot,csv_samples,bag_messages,csv_frequency_hz,bag_frequency_hz,status,reason
+HWS-002-FIFO,LIMO-01,720000,720000,100.00001113150282,100.00010884135457,COUNT_MATCH,Counts/rates compared without decoding CDR pose payloads.
+HWS-002-FIFO,LIMO-02,720000,720000,100.0000081824426,100.0001353129192,COUNT_MATCH,Counts/rates compared without decoding CDR pose payloads.
+HWS-003-BACS,LIMO-01,720000,720000,99.9999857655517,100.00012878024918,COUNT_MATCH,Counts/rates compared without decoding CDR pose payloads.
+HWS-003-BACS,LIMO-02,720000,720000,99.99999985127756,100.00013311521886,COUNT_MATCH,Counts/rates compared without decoding CDR pose payloads.
+HWS-005-BACS+,LIMO-01,720000,720000,100.0000036974775,100.00016167395583,COUNT_MATCH,Counts/rates compared without decoding CDR pose payloads.
+HWS-005-BACS+,LIMO-02,720000,720000,100.00000265380932,100.00014561069814,COUNT_MATCH,Counts/rates compared without decoding CDR pose payloads.

@@ -1,0 +1,10 @@
+radio:
+  module: RYLR998
+  frequency_mhz: 868
+  spreading_factor: 7
+  bandwidth_hz: 125000
+  coding_rate: "4/5"
+regulatory:
+  duty_cycle: 0.01
+scheduler:
+  window_s: 60.0
