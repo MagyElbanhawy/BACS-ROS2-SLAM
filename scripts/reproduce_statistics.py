@@ -1,40 +1,70 @@
 #!/usr/bin/env python3
-"""Produce only statistics supported by genuine run-level observations."""
-from __future__ import annotations
+"""
+Reproduces statistical comparisons between FIFO and BACS+ scheduling policies.
 
-import csv
-import sys
-from pathlib import Path
+NOTE: Historical FIFO and BACS+ sessions were recorded independently (separate dates/sessions).
+Therefore, we treat these as INDEPENDENT samples using Mann-Whitney U test,
+NOT as paired observations. Run IDs do not establish temporal pairing.
+"""
+import pandas as pd
+import numpy as np
+from scipy import stats
+import argparse
 
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
-from analysis.physical.pipeline import write_csv
-from analysis.statistics.metrics import cliffs_delta, paired_wilcoxon
+def compute_independent_statistics(csv_path, output_path):
+    print("🔍 Loading physical experiment results...")
+    df = pd.read_csv(csv_path)
+    
+    # Separate FIFO and BACS+ runs (treat as independent samples)
+    fifo_data = df[df['policy'] == 'FIFO']['metric_value'].dropna()
+    bacs_plus_data = df[df['policy'] == 'BACS+']['metric_value'].dropna()
+    
+    n_fifo = len(fifo_data)
+    n_bacs_plus = len(bacs_plus_data)
+    
+    print(f"  FIFO runs: {n_fifo}")
+    print(f"  BACS+ runs: {n_bacs_plus}")
+    
+    # Use Mann-Whitney U test for independent samples (non-parametric)
+    statistic, p_value = stats.mannwhitneyu(fifo_data, bacs_plus_data, alternative='two-sided')
+    
+    # Calculate effect size (Cliff's Delta)
+    cliffs_delta = compute_cliffs_delta(fifo_data.values, bacs_plus_data.values)
+    
+    results = {
+        'n_fifo': [n_fifo],
+        'n_bacs_plus': [n_bacs_plus],
+        'test_name': ['mannwhitney_u'],
+        'test_statistic': [statistic],
+        'p_value': [p_value],
+        'cliffs_delta': [cliffs_delta],
+        'interpretation': ['independent_samples']
+    }
+    
+    results_df = pd.DataFrame(results)
+    results_df.to_csv(output_path, index=False)
+    
+    print(f"\n✅ Statistical results saved to: {output_path}")
+    print(f"   Mann-Whitney U Statistic: {statistic:.4f}")
+    print(f"   p-value: {p_value:.4f}")
+    print(f"   Cliff's Delta: {cliffs_delta:.4f}")
+    print(f"\n💡 These are INDEPENDENT samples (not paired).")
 
-
-def main() -> None:
-    path = ROOT / "paper_results" / "physical" / "timing_per_run.csv"
-    if not path.exists():
-        raise SystemExit("Run scripts/reproduce_physical.py first.")
-    by_policy: dict[str, dict[str, float]] = {}
-    with path.open(newline="", encoding="utf-8") as handle:
-        for row in csv.DictReader(handle):
-            by_policy.setdefault(row["policy"], {})[row["run"]] = float(row["deferral_mean_s"])
-    fifo, plus = by_policy["FIFO"], by_policy["BACS+"]
-    runs = sorted(set(fifo) & set(plus), key=int)
-    left, right = [fifo[x] for x in runs], [plus[x] for x in runs]
-    test = paired_wilcoxon(left, right)
-    rows = [
-        {"metric": "map_alignment_rmse_m", "comparison": "FIFO vs BACS+",
-         "n_pairs": 0, "wilcoxon_statistic": "", "p_value": "", "cliffs_delta": "",
-         "status": "NOT_COMPUTABLE", "reason": "No fused-map estimate or estimated trajectory is present."},
-        {"metric": "mean_scheduler_deferral_s", "comparison": "FIFO vs BACS+",
-         "n_pairs": len(runs), "wilcoxon_statistic": test["statistic"], "p_value": test["p_value"],
-         "cliffs_delta": cliffs_delta(left, right), "status": "COMPUTED",
-         "reason": "Paired by logged run identifier; interpretation is limited to scheduler deferral."},
-    ]
-    write_csv(ROOT / "paper_results" / "physical" / "physical_statistics.csv", list(rows[0]), rows)
-
+def compute_cliffs_delta(x, y):
+    """Compute Cliff's Delta effect size."""
+    total = 0
+    for xi in x:
+        for yj in y:
+            if xi > yj:
+                total += 1
+            elif xi < yj:
+                total -= 1
+    return total / (len(x) * len(y))
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input", type=str, required=True, help="Path to physical results CSV")
+    parser.add_argument("--output", type=str, required=True, help="Path to output statistics CSV")
+    args = parser.parse_args()
+    
+    compute_independent_statistics(args.input, args.output)
