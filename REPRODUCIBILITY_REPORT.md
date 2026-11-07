@@ -8,7 +8,7 @@ All recomputed values below are rendered from generated CSVs by `scripts/update_
 | BACS map-alignment RMSE | Not encoded | N/A | N/A | NOT_COMPUTABLE | No fused map or estimated trajectory supplied | `scripts/reproduce_physical.py` |
 | BACS+ map-alignment RMSE | Not encoded | N/A | N/A | NOT_COMPUTABLE | No fused map or estimated trajectory supplied | `scripts/reproduce_physical.py` |
 | BACS+ improvement versus FIFO | Not encoded | N/A | N/A | NOT_COMPUTABLE | Map RMSE unavailable | `scripts/reproduce_statistics.py` |
-| Map-RMSE Wilcoxon and Cliff's delta | Not encoded | N/A | N/A | NOT_COMPUTABLE | Map RMSE unavailable | `scripts/reproduce_statistics.py` |
+| Map-RMSE (Not Computable - No fused-map estimate) and Cliff's delta | Not encoded | N/A | N/A | NOT_COMPUTABLE | Map RMSE unavailable | `scripts/reproduce_statistics.py` |
 | BACS+ median scheduling deferral (s) | N/A | 156.438 | N/A | COMPUTED | Scheduler log | `scripts/reproduce_physical.py` |
 | BACS+ median channel delay (s) | N/A | N/A | N/A | NOT_COMPUTABLE | `t_tx_ns`/`t_rx_ns` are not recorded | `scripts/reproduce_physical.py` |
 | Deferral/channel ratio | N/A | N/A | N/A | NOT_COMPUTABLE | Channel delay not recorded | `scripts/reproduce_physical.py` |
