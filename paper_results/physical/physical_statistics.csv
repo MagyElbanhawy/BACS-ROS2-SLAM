@@ -1,2 +1,2 @@
 metric,comparison,n_fifo,n_bacs_plus,test_name,test_statistic,p_value,cliffs_delta,status,reason
-mean_scheduler_deferral_s,FIFO vs BACS+ (Independent),10,10,mannwhitney_u,47.0,0.8501067391385259,-0.06,COMPUTED,Independent samples from separate sessions; interpretation limited to scheduler deferral.
+mean_scheduler_deferral_s,FIFO vs BACS+ (Independent),10,10,mannwhitney_u,47.0,0.8501067391385259,-0.06,COMPUTED,Exploratory independent analysis (separate sessions); session-level dependence possible.
