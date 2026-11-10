@@ -111,3 +111,24 @@ Topic presence alone does not establish successful mapping. Verify that the five
 ## Reproducibility status
 
 This archive preserves the original demonstration files without changing their behavior or the research data. Full clean-machine reproduction is **pending** archival of the five robot URDFs and validation of any external model, mesh, or plugin dependencies. No EMRMF/BACS performance claims should be inferred from this visualization alone.
+
+## Real Hardware Evidence
+
+Photographs of the physical wireless communication
+boards and experimental hardware.
+
+### Wireless Communication Boards
+
+![Wireless board front](images/lora_modules/module_front.jpeg)
+
+![Wireless board detail](images/lora_modules/module_detail.jpeg)
+
+### Experimental Hardware Setup
+
+![Hardware testing](images/experimental_setup/hardware_testing.jpeg)
+
+![Hardware inventory](images/experimental_setup/hardware_inventory.jpeg)
+
+**Note:** These photographs document physical hardware.
+They do not independently verify LoRa communication,
+ROS 2 integration, or BACS scheduling.
